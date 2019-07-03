@@ -1,0 +1,21 @@
+[modes]
+modes = release debug-gnu
+
+[release]
+src = src
+mod_dir = build/mod
+obj_dir = build/obj
+output = polcolmc
+cflags = -c -O3
+include = src/inc
+exclude_dir = src/inc
+
+[debug-gnu]
+compiler = gnu
+src = src
+build_dir = build/dbg
+output = polcolmc-dbg
+cflags = -c -g -fcheck=bounds
+include = src/inc
+exclude_dir = src/inc
+

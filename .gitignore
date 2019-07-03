@@ -1,0 +1,12 @@
+.vscode
+build
+build-*
+/polcolmc
+/polcolmc-dbg
+docs/_build
+docs/_themes
+docs/doxyxml
+.spe
+
+#test results
+tests/pcmc_*
