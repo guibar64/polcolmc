@@ -2,7 +2,7 @@
 
 Monte-Carlo simulations of polydisperse spheres.
 
-<!-- Detailed build and usage instructions are in the online [documentation]. -->
+For detailed build and usage instructions, see the online [documentation](https://polcolmc.readthedocs.io/en/latest).
 
 ## Minimum requirements
 
@@ -37,4 +37,4 @@ will run a simulation in the working directory.
 
 ## Licensing
 
-This software is released into the public domain. See `LICENSE`.
+This software is released into the public domain. See `LICENSE.txt`.
