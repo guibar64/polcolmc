@@ -232,9 +232,6 @@ logical function get_param(list, key, val)
   character(len=:), allocatable :: val
   integer :: i
   get_param = .false.
-  do i=1,len(val)
-    val(i:i) = ' '
-  end do
   do i=list%len, 1, -1
     if(list%pars(i)%key(1:len_trim(list%pars(i)%key)) == key) then
       list%pars(i)%accessed = .true.
