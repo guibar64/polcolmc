@@ -23,7 +23,7 @@ subroutine histor8_init(p, dr, rmin, n)
   p%rmin = rmin
   if(allocated(p%nh)) then
     if(ubound(p%nh, 1) /= n) then
-      deallocate(p%h)
+      deallocate(p%nh)
       allocate(p%nh(n))
     end if
   else
@@ -31,6 +31,14 @@ subroutine histor8_init(p, dr, rmin, n)
   end if
   p%nh = 0.0
 
+end subroutine
+
+subroutine histor8_reset(p)
+  !! Reset an histogram to do a new sampling
+  type(HistoR8), intent(inout) :: p
+
+  p%nupd = 0
+  p%nh = 0.0
 end subroutine
 
 subroutine histor8_update(p, val)
