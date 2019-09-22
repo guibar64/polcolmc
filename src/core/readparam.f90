@@ -205,7 +205,7 @@ integer function read_configuration(unit, list, initial_section)
       if(line(j:j) == '"') then
         j = j + 1
         do k=j, len(line)
-          if(line(j:j) == '"') exit
+          if(line(k:k) == '"') exit
         end do
         if(k>len(line)) then
           write(error_unit, '(A,I0,A)') "Error line ", nl,': expected ''"'' before end of line.'
