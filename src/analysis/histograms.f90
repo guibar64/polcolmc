@@ -54,6 +54,20 @@ subroutine histor8_update(p, val)
 
 end subroutine
 
+subroutine histor8_update_n(p, val, n)
+  !! Update an histogram with `n` values
+  type(HistoR8), intent(inout) :: p
+  real(8), intent(in) :: val
+  integer, intent(in) :: n
+  integer :: ival
+  ival = floor(p%dri * (val-p%rmin)) + 1
+  if(ival >= lbound(p%nh,1) .and. ival <= ubound(p%nh,1)) then
+    p%nh(ival) = p%nh(ival) + n
+  end if
+  p%nupd = p%nupd + n
+end subroutine
+
+
 subroutine histor8_set_distribution(p)
   !! Sets p%h to a distribution
   type(HistoR8), intent(inout) :: p
