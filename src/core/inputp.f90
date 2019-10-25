@@ -77,6 +77,7 @@ implicit none
     integer :: widom_period = -1
     integer :: widom_samples = 1
     integer :: seed_analysis = 16385673
+    integer :: internal_steps = -1
   end type Input
 
 
@@ -240,6 +241,8 @@ contains
       read(val, *) inp%widom_period
     case("widom_samples")
       read(val, *) inp%widom_samples
+    case("internal_steps")
+      read(val, *) inp%internal_steps
     case default
       input_find_keyval = .false.        
     end select
