@@ -465,6 +465,7 @@ contains
        st%res(k)%popm(1:st%dist%nfam) = 1.d0*st%boxes(k)%fam(1:st%dist%nfam)
        st%res(k)%volm = st%boxes(k)%volume
        st%res(k)%vol2m = st%boxes(k)%volume**2
+       st%res(k)%hetv = sum(st%boxes(k)%parts(1:st%boxes(k)%n)%rayon**3)
     end do
     st%sdata%step_count = 1
     st%sdata%step_nrj_n = st%inp%step_nrj
@@ -525,6 +526,7 @@ contains
       st%res(k)%popm(1:st%dist%nfam) = st%res(k)%popm(1:st%dist%nfam) + 1.d0*st%boxes(k)%fam(1:st%dist%nfam)
       st%res(k)%volm = st%res(k)%volm + st%boxes(k)%volume
       st%res(k)%vol2m = st%res(k)%vol2m + st%boxes(k)%volume**2
+      st%res(k)%hetv = st%res(k)%hetv + sum(st%boxes(k)%parts(1:st%boxes(k)%n)%rayon**3)
     end do
 
     if(rstep==st%sdata%step_nrj_n) then
@@ -667,10 +669,11 @@ contains
       st%res(k)%e2c = 1.5D0*kt*kt*st%res(k)%nm+st%res(k)%Var_Ep
     end do
     do k=1,st%ntotbox
-      st%res(k)%hetv=0.0D0
-      do j=1,st%dist%nfam
-          st%res(k)%hetv=st%res(k)%hetv+st%res(k)%popm(j)*st%dist%rad(j)**3
-      end do
+      ! st%res(k)%hetv=0.0D0
+      ! do j=1,st%dist%nfam
+      !     st%res(k)%hetv=st%res(k)%hetv+st%res(k)%popm(j)*st%dist%rad(j)**3
+      ! end do
+      st%res(k)%hetv = st%res(k)%hetv/st%sdata%step_count
       st%res(k)%hetv = st%res(k)%hetv * 4.d0*pi/3.d0 /st%res(k)%volm
     end do
     end associate
