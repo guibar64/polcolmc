@@ -5,6 +5,7 @@ use simulation, only: MCSimulation, run_simulation_equil, run_simulation, init_s
   deallocate_simulation
 use tools
 use readparam, only: warn_about_unkown_params
+use sgc, only: sgc_doublerun
 use iso_fortran_env
 !$ use omp_lib
 implicit none
@@ -195,8 +196,12 @@ end if
 select case(action)
 case(RUN_SIMU)
   call init_simulation(the_sim, fich_dist,fich_par,fich_in)
-  call run_simulation_equil(the_sim, the_sim%state%inp%maxcycle_stab)
-  call run_simulation(the_sim, the_sim%state%inp%maxcycle_calc)
+  if(the_sim%state%inp%semigrand) then
+    call sgc_doublerun(the_sim)
+  else
+    call run_simulation_equil(the_sim, the_sim%state%inp%maxcycle_stab)
+    call run_simulation(the_sim, the_sim%state%inp%maxcycle_calc)
+  end if
   call deallocate_simulation(the_sim)
 case(CALC_GDER)
   call compute_gder(infile, outfile, fich_dist, fich_par,dr_crdf, bstep, estep)
@@ -229,7 +234,7 @@ end select
 deallocate(ssseed)
 contains
 
-subroutine run_simu_t()
+subroutine do_simulation()
   !type(MCSimulation) :: the_sim
   call init_simulation(the_sim, fich_dist,fich_par,fich_in)
   call run_simulation_equil(the_sim, the_sim%state%inp%maxcycle_stab)

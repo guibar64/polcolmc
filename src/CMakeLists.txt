@@ -44,6 +44,7 @@ set(SIMU_SRC
   analysis/histograms.f90
   tools/trr.F90
   tools/tools.f90
+  sgc.f90
 )
 
 add_library(pcmc ${SIMU_SRC} ${NRG_SRC} ${CORE_SRC})
