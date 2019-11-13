@@ -78,8 +78,8 @@ module simulation
     type(NrgErgo), allocatable :: nea(:)
   end type MCSimulation
 
-  private :: run_simulation_nofinaloutput, output_seff, output_sfullallg, output_maxs, output_rdf
-  private :: output_nrg, output_pop, output_conf, output_nrg_file, calcul_tail, update_dx_trans
+  private :: run_simulation_nofinaloutput, output_seff, output_sfullallg, output_rdf
+  private :: output_nrg, output_pop, output_conf, calcul_tail, update_dx_trans
   private :: NrgErgo, nrgergo_update
   private :: allocate_simulation_intern
 
@@ -122,7 +122,7 @@ contains
     use nrg
     type(PcmcState) :: st
     type(NrgRoutines) :: nr
-    real(8) ::  dump,het,volume,inv_debye_length
+    real(8) ::  het,volume,inv_debye_length
     integer :: i,ntotpar,k
 
     ntotpar = sum(st%dist%pop(:))
@@ -414,7 +414,7 @@ contains
     do k=1,st%ntotbox
       st%boxes(k)%ener = sim%nrg%energy_box(st,st%boxes(k), st%boxes(k)%press)
       if(.not. st%boxes(k)%ener%noverlap) then
-          recouv = isnot_overlapped(k,st%boxes(k)%n,st%boxes(k)%parts,st%boxes(k)%Met,st%rcrc,id, jd,st%mode_box)
+          recouv = isnot_overlapped(st%boxes(k)%n,st%boxes(k)%parts,st%boxes(k)%Met,id, jd,st%mode_box)
           if(.not. recouv) then
   
              write(error_unit,'(A,I0,A,I0,A)') "Fatal Error: step_series_next*() => Overlap on initial position. ("&
@@ -513,8 +513,7 @@ contains
   subroutine update_base_res(sim)
     use iso_fortran_env
     type(MCSimulation) :: sim
-    integer :: rstep,i,sel_mvmt,k
-    real(8) :: emean, evar
+    integer :: rstep,i,k
     type(NrgRec) :: ener_dump, ener_ip
     associate(st => sim%state)
     rstep = st%step-st%sdata%cycle_first_step
@@ -633,7 +632,7 @@ contains
   subroutine step_series_end(sim)
     !! Should be called after a series of calls to \ref step_series_next. 
     type(MCSimulation) :: sim
-    integer :: k,j
+    integer :: k
     associate(st => sim%state)
 
     do k=1,st%ntotbox
@@ -764,23 +763,6 @@ contains
 
   end subroutine output_nrg
 
-  subroutine output_nrg_file(st,file)
-    !! Prints some averaged quantities (energy, pressure ...) to file file
-    type(PcmcState) :: st
-    character(*), intent(in) :: file
-    integer :: k, ufo
-    open(newunit=ufo,file=file)
-    do k=1,st%ntotbox
-      write(ufo,'(8G15.7)',advance='no') st%res(k)%hetv, (kt*st%res(k)%nm)/(st%res(k)%volm)*UnitPsT*st%inp%temp, &
-        st%res(k)%hsp,st%res(k)%virp,st%res(k)%p,&
-        st%res(k)%Ep,st%res(k)%e,st%res(k)%e2c
-
-    end do
-    write(ufo,*)
-
-    close(ufo)
-  end subroutine output_nrg_file
-
   subroutine append_nrj(st,out_nrj)
     !! Appends current energy and pressure to the files.
     implicit none
@@ -891,25 +873,11 @@ contains
     end do
   end subroutine output_sfullallg
 
-  subroutine output_maxs(sim, file)
-    !! Prints Smax to a file.
-    type(MCSimulation) :: sim
-    character(*), intent(in) :: file
-    integer :: k, ufo
-    open(newunit=ufo,file=file)
-    do k=1,sim%state%ntotbox
-      write(ufo,'(2ES16.7)',advance='no') sim%state%res(k)%hetv, maxval(sim%res_sq(k)%S)
-    end do
-    write(ufo,*)
-
-    close(ufo)
-  end subroutine output_maxs
-
   subroutine output_sim_base(sim)
     !! Prints average energies, pressure....
     use iso_fortran_env
     type(MCSimulation) :: sim
-    integer :: i,j,k
+    integer :: k
     associate(st => sim%state)
     if(sim%prod) then
       write(output_unit,'(A)') "Box        NRJ tail         Vir tail"  
@@ -946,7 +914,7 @@ contains
     character(*), intent(in), optional :: parameters   !! Path to a parameter file
     character(*), intent(in), optional :: positions    !! Path to a file with an initial particle configuration
     ! logical, intent(in), optional :: verb
-    character(len=:), allocatable :: fich_dist_,fich_par_,fich_in_, fich_log_
+    character(len=:), allocatable :: fich_dist_,fich_par_,fich_in_
     integer :: k, ntotpar, stat
     logical :: fexists
     type(Pmconf) :: finit
@@ -1120,7 +1088,6 @@ contains
     !! Does the finish step of analysis
     use iso_fortran_env
     type(MCSimulation) :: sim
-    type(PcmcState) :: st
     integer :: k, itemp
     real(8) :: force2(max_boxes), vseconde(max_boxes) ! not really used atm
     associate(st => sim%state)
@@ -1184,8 +1151,6 @@ contains
     !! Output results from analysis modules
     use iso_fortran_env
     type(MCSimulation) :: sim
-    integer :: k
-    type(PcmcState) :: st
     associate(st => sim%state)
 
     if(sim%prod) then
@@ -1229,7 +1194,6 @@ contains
     !! Free ressources of analysis modules
     type(MCSimulation) :: sim
     integer :: k
-    type(PcmcState) :: st
     associate(st => sim%state)
     if(st%inp%statcell) call statcell_free()
     if(st%inp%prob_swap > 0.d0) call swapmap_free()
@@ -1312,7 +1276,7 @@ contains
     real(8) function divideOrZero(a,b)
       integer(8), intent(in) :: a,b
       if(b /= 0) then
-        divideOrZero = (1.0*a)/(1.0*b)
+        divideOrZero = (1.0_8*a)/(1.0_8*b)
       else
         divideOrZero = 0.0
       end if
@@ -1325,7 +1289,6 @@ contains
     use iso_fortran_env
     type(MCSimulation) :: sim
     integer, intent(in) :: maxsteps
-    type(PcmcState) :: st
     integer :: first_step, step, rstep, log_unit
     associate(st => sim%state)
     open(newunit=log_unit, file=sim%prefix // "_log.txt")

@@ -110,16 +110,14 @@ contains
 
   end function random_placement
 
-  logical function isnot_overlapped(idb,n,parts,metricG,rc2, ifault, jfault,m_box) result(over)
+  logical function isnot_overlapped(n,parts,metricG, ifault, jfault,m_box) result(over)
     !! Checks if there is overlaps in a particle state.
     !! On overlap, the first overlapping pair found is returned to (`ifault`, `jfault`)
     use celldec, only: Particule
     implicit none
     integer,intent(in) :: n !! number of particles
-    integer,intent(in) :: idb !! box number
     integer,intent(in) :: m_box !! box type
     integer,intent(out) :: ifault, jfault
-    real(8),intent(in) :: rc2 !! square of the curoff radius
     real(8),intent(in) :: metricG(3,3) !! box metric
     type(Particule),intent(in),dimension(n) :: parts !! particles
 

@@ -132,7 +132,7 @@ subroutine nrg_init(st, nr)
   type(PcmcState) :: st
   type(NrgRoutines) :: nr
   integer :: mode,i
-  real(8) :: kp, cm
+  real(8) :: kp
 
   call modes_affect_pot(nr, st%inp%smod_pot, st%mode_pot)
 

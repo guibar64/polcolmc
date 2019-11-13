@@ -37,9 +37,9 @@ real(8), private :: norm_fac = s4p, rc = -1.
 
 logical, private :: alternative_calc = .false.
 real(8), private :: dq, q_min,q_max
-real(8), private :: rcin=0.d0, rcin2, rc_big = -1, rc_small = -1, rc_large, rc_sel = -1.0
+real(8), private :: rcin=0.d0, rc_big = -1, rc_small = -1, rc_large, rc_sel = -1.0
 integer, private :: mconn = 8
-real(8), private :: distConn(32), CorrQThrsh=0.2, corrc = 0.6
+real(8), private :: distConn(32), CorrQThrsh=0.2
 real(8), private :: vol_frac
 real(8), private :: q6_big_sup=0.077*s4p,q6_small_inf=0.1*s4p
 real(8), private :: barq6_small_sup=0.02597*s4p, barq6_big_inf=0.02598*s4p, barq6_big_sup=0.05*s4p
@@ -58,10 +58,10 @@ real(8), private :: flu_alt_max_bq6 = 0.276
 
 
 private :: pfil, calc_vol_frac, frac, smalls_count, bigs_count
-private :: is_selected, is_big, number_of_nb_sel, calc_number_of_big_nb
+private :: is_selected, number_of_nb_sel
 private :: cond_bcc, cond_hcp, cond_fcc, cond_flu, q6_cond_1, q6_cond_2
 private :: barq6_cond_1, barq6_cond_2, big_q6_bq6_cond, small_q6_bq6_cond
-private :: nbvois_cond_small, nbvois_cond_big, nbvois_cond_1_with_big_nb, nbvois_cond_2_with_big_nb
+private :: nbvois_cond_small, nbvois_cond_big
 private :: makesel, calc_mean_sel_nb, calc_mean_nb, calc_all_n_sel_nb, select_crit_custom
 private :: prodm3v3, pbc
 private :: init_cutoffs, do_calc_sep_phases, ze_selection_big_small_small_around_big
@@ -88,8 +88,7 @@ contains
     type(Distrib) :: dist     !! distribution
     type(ParamList) :: config  !! parameters
     character(len=:), allocatable :: key, val
-    integer :: i, ufc=63
-    real(8) :: nbref
+    integer :: i
 
     prefout = "bondorder_"
     call start_iter_keyval(config)
@@ -361,7 +360,7 @@ contains
     type(OrderData) :: xv(np) !! particle data array
     type(Box) :: b            !! simulation box
     type(Distrib) :: dist     !! particle distribution
-    integer :: i,nbig, nsma, nbcc, nhcp, nfcc, nflu,nbig_pre, nsma_pre, ufc=72, ntot, nq
+    integer :: i, nbcc, nhcp, nfcc, nflu, ufc=72, nq
     real(8) :: rc_mean
     real(8) :: qvals(np)
 
@@ -423,7 +422,7 @@ contains
     nhcp = select_crit_custom(np, xv, "hcp", is_not_extracted, cond_hcp_alt, rc_sel, with_nb=.false.)
     print *,"hcp (presel): ", nhcp 
     block
-      integer :: nvsel,jv,j,nplus
+      integer :: nvsel,jv,j
       real(8) :: rcn
       rcn = 1.74*first_sep
       xv(:)%onprend_nb = .false.
@@ -770,12 +769,6 @@ contains
     type(OrderData), intent(in) :: item
     res = .not. item%onprend
   end function
-
-  
-  logical function is_big(item) result(res)
-    type(OrderData), intent(in) :: item
-    res = item%isBig
-  end function
   
   
   integer function number_of_nb_sel(np, xv, i, cond, rcut) result(res)
@@ -798,23 +791,6 @@ contains
     enddo
     res = npris
   end function
-  
-  real(8) function calc_number_of_big_nb(np, xv, cond) result(res)
-    !! Returns number of *big* particles satisfying condition `cond`.
-    integer, intent(in) :: np
-    type(OrderData) :: xv(np)
-    procedure(OrderCondition) :: cond
-    integer :: nbmoy, nsel,i
-    nbmoy = 0
-    nsel = 0
-    do i=1,np
-      if(cond(xv(i))) then
-        nbmoy = nbmoy + xv(i)%n_big_nb
-        nsel = nsel + 1
-      endif
-    enddo
-    res = real(nbmoy,8) / real(nsel, 8)
-  end function   
   
   ! The following procedures express the conditions
   ! for a particle to belong to a phasee
@@ -893,16 +869,6 @@ contains
     type(OrderData), intent(in) :: item
     res = item%onprend .and. item%n_sel_nb < 5 .and. item%n_sel_nb >= 3
   end function
-  
-  logical function nbvois_cond_1_with_big_nb(item) result(res)
-    type(OrderData), intent(in) :: item
-    res = item%onprend .and. item%n_sel_nb <= 7 .and. item%n_sel_nb >= 5 .and. item%n_big_nb < 7 .and. item%n_big_nb >= 5
-  end function
-
-  logical function nbvois_cond_2_with_big_nb(item) result(res)
-    type(OrderData), intent(in) :: item
-    res = item%onprend .and. item%n_sel_nb <= 5 .and. item%n_sel_nb >= 3 .and. item%n_big_nb <= 13 .and. item%n_big_nb >= 11
-  end function
 
   logical function cond_fcc_2(item) result(res)
     type(OrderData), intent(in) :: item
@@ -934,7 +900,7 @@ contains
 
   logical function cond_flu_alt(item) result(res)
     type(OrderData), intent(in) :: item
-    real(8) :: bq6, bq4
+    real(8) :: bq6
     bq6 = item%barq6
     !bq4 = item%barq4
     res = bq6 <= flu_alt_max_bq6
@@ -1059,7 +1025,7 @@ contains
     logical, optional :: with_nb
     logical :: eff_with_nb
     
-    integer :: i,nnn
+    integer :: nnn
     real(8) :: nv_moy
     
     if(present(with_nb)) then

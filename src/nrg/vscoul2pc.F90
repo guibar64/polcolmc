@@ -39,7 +39,7 @@ contains
     real(8), intent(out) :: xmax !! Maximum accessible by the table 
     logical, intent(in) :: lout  !! If set to `.true.`, some information about the table is printed on standard output.
     integer :: ix0, ix1, ixx
-    real(8) :: x0, x1, xx, ErrMax, err
+    real(8) :: x0, x1, ErrMax, err
     integer :: i, index
     dimension :: ix0(1:2),ix1(1:2),ixx(1:2)
 

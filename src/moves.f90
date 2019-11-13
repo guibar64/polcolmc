@@ -218,7 +218,6 @@ contains
     type(PcmcState) :: st
     type(NrgRoutines) :: nr
     type(NrgRec) :: ener1,ener0
-    logical :: bool
     integer :: ip,ibox,counter=0, outfo_rcp
     real(8) :: store_pos(3),pp(3)
     counter=counter+1
@@ -319,8 +318,6 @@ contains
     type(PcmcState) :: st
     integer,intent(in) :: ip, box
     real(8), intent(in) :: new_charge
-    integer :: old_fam, fam, j
-    real(8) :: mr
     st%boxes(box)%parts(ip)%ech = new_charge
   end subroutine change_part_echarge
   

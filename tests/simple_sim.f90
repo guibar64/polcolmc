@@ -3,7 +3,6 @@ program simple_sim
   use simulation
   use iso_fortran_env
   implicit none
-  integer :: i
   type(MCSimulation) :: simu
   real(8), parameter :: ep=7747.465d0,press=1947.6201d0
   integer :: step

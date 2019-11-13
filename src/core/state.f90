@@ -699,7 +699,7 @@ end function
       end do
       write(fu) bconfPos
       do i=1,j
-        vec = st%boxes(k)%Parts(i)%pos
+        vec = real(st%boxes(k)%Parts(i)%pos, REAL32)
         write(fu) vec
       end do
       write(fu) bconfFam
@@ -717,7 +717,7 @@ end function
       ! Write radii. Could be optional.
       write(fu) bconfRad
       do i=1,j
-        r = st%boxes(k)%Parts(i)%rayon
+        r = real(st%boxes(k)%Parts(i)%rayon, REAL32)
         write(fu) r
       end do
       write(fu) bconfBoxEnd

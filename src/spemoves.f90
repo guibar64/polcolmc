@@ -41,7 +41,7 @@ integer function echang2p(st, nr)
   type(PcmcState) :: st
   type(NrgRoutines) :: nr
   type(NrgRec) :: ener1,ener0
-  logical :: bool,authtoselfam
+  logical :: authtoselfam
   integer :: i,ip,ip1,ibox,fam1,counter=0
   counter=counter+1
   ibox = 1 + floor(ran2(st%rng)*st%ntotbox)
@@ -251,7 +251,6 @@ end function echang2p_box
     type(PcmcState) :: st
     type(NrgRoutines) :: nr
     type(NrgRec) :: ener1_1,ener1_2,ener0_1,ener0_2
-    logical :: bool
     integer :: ip,ibox1,ibox2,i,idump,idump1,fam,counter=0
     real(8) :: store_pos(3)
     real(8) :: deltabmu
@@ -577,7 +576,7 @@ end function echang2p_box
     type(PcmcState) :: st
     type(NrgRoutines) :: nr
     type(NrgRec) :: ener1_1,ener1_2,ener0_1,ener0_2,ener_dump
-    logical :: bool,authtoselfam
+    logical :: authtoselfam
     integer :: ip,ibox1,ibox2,i,idump,idump1,fam,k,k_selected,counter=0,counter2=0
     integer :: ntrials_rosbth
     real(8) :: store_pos(3),dump
@@ -747,7 +746,7 @@ end function echang2p_box
     type(PcmcState):: st
     type(NrgRoutines) :: nr
     type(NrgRec) :: ener1_1,ener1_2,ener0_1,ener0_2
-    logical :: bool,authtoselfam
+    logical :: authtoselfam
     integer :: ip,ip1,ibox1,ibox2,fam1,fam2,idump,idump1
     real(8) :: deltabmu
     type(Particule) :: store_part
@@ -869,7 +868,7 @@ end function echang2p_box
    type(PcmcState) :: st
    type(NrgRoutines) :: nr
    type(NrgRec) :: ener1_1,ener1_2,ener0_1,ener0_2,ener_dump
-   logical :: bool,authtoselfam
+   logical :: authtoselfam
    integer :: ip,ip1,ibox1,ibox2,i,idump,idump1,k,k_selected,counter=0
    integer :: fam1,fam2, ntrials_rosbth
    real(8) :: dump
@@ -1090,7 +1089,7 @@ integer function echang2p_box_impur_rosbth2(st, nr)
    type(PcmcState) :: st
    type(NrgRoutines) :: nr
    type(NrgRec) :: ener1_1,ener1_2,ener0_1,ener0_2,ener_dump
-   logical :: bool,authtoselfam
+   logical :: authtoselfam
    integer :: ip,ip1,ibox1,ibox2,i,idump,idump1,k,k_selected,counter=0
    integer :: fam1,fam2,j, ntrials_rosbth
    real(8) :: dump

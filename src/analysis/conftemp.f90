@@ -89,7 +89,6 @@ subroutine conftemp_init(st, nr, fich_out_ct, first_step)
   type(NrgRoutines) :: nr
   character(*), intent(in) :: fich_out_ct !! 
   integer, optional :: first_step  !! first step (default is 0)
-  integer :: i
   if(present(first_step)) then
     step_ct_n = first_step
   else
@@ -111,7 +110,6 @@ subroutine conftemp_new_step(st, nr, step)
   integer, intent(in) :: step !! step number (for printing)
   integer :: i,k
   real(8) :: force2_l(max_boxes), vseconde_l(max_boxes), fp, v2p
-  character(64) :: fmt
   step_ct = step_ct + 1
   Force2_l = 0
   Vseconde_l = 0

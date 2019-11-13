@@ -80,7 +80,6 @@ end subroutine param_list_next
 subroutine get_current_keyval(list, key,val)
   type(ParamList), intent(in) :: list
   character(len=:), allocatable :: key,val
-  integer :: kl,vl
   key = list%pars(list%idx)%key
   val = list%pars(list%idx)%val
 end subroutine
@@ -116,7 +115,7 @@ integer function read_configuration(unit, list, initial_section)
   integer, intent(in) :: unit  !! file unit to read from
   character(*), intent(in), optional :: initial_section !! sets the initial section for otherwise sectionless keys
   character(512) :: key,val
-  integer :: i,kl,vl,typ, statut, c,j, k, keyLen, valLen, nl, fp
+  integer :: i, statut, c,j, k, keyLen, valLen, nl, fp
   character(1024) :: line
   character(256) :: section
   integer, parameter :: maxKeyLen = 256, maxValLen = 512

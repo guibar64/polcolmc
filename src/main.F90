@@ -234,13 +234,6 @@ end select
 deallocate(ssseed)
 contains
 
-subroutine do_simulation()
-  !type(MCSimulation) :: the_sim
-  call init_simulation(the_sim, fich_dist,fich_par,fich_in)
-  call run_simulation_equil(the_sim, the_sim%state%inp%maxcycle_stab)
-  call run_simulation(the_sim, the_sim%state%inp%maxcycle_calc)
-  call deallocate_simulation(the_sim)
-end subroutine
 subroutine check_arg(iarg, desc)
   integer, intent(in) :: iarg
   character(*), intent(in) :: desc

@@ -64,7 +64,6 @@ contains
     type(Pressure),intent(out),optional :: press
 
     type(NrgRec) :: te
-    logical :: over
     real(8) :: e
     integer :: i
     ! basically check overlaps
