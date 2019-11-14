@@ -35,8 +35,8 @@ integer, private :: analog=71
 real(8), private, parameter :: s4p = sqrt(4*PI)
 real(8), private :: norm_fac = s4p, rc = -1.
 
-logical, private :: alternative_calc = .false.
-real(8), private :: dq, q_min,q_max
+logical, private :: alternative_calc = .false., compute_q4q6_map = .false.
+real(8), private :: dq=0.005, q_min,q_max
 real(8), private :: rcin=0.d0, rc_big = -1, rc_small = -1, rc_large, rc_sel = -1.0
 integer, private :: mconn = 8
 real(8), private :: distConn(32), CorrQThrsh=0.2
@@ -163,6 +163,8 @@ contains
         prefout = val(1:len_trim(val)) // "_"
       case("bondorder.alternative_calc")
         alternative_calc = read_logical(val)
+      case("bondorder.compute_q4q6_map")
+        compute_q4q6_map = read_logical(val)
       case("bondorder.separation_first_neighbors")
         read(val, *) first_sep
       case("bondorder.bcchcp_sep_factor")
@@ -211,26 +213,33 @@ contains
     vol_frac = calc_vol_frac(b)
 
     xv(:)%onprend = .true.
-    call output_pop(pfil("pop_ref.dat"), np, xv, b, dist)
+    
     ! Selections from splitting q6: n_neighbours_crit
     
     call init_cutoffs(b%volume**(1.d0/3.d0), np)
-    if(alternative_calc) then
-      call do_calc_sep_phases_alternative(np, xv, b, dist)
-    else
+    if(compute_q4q6_map) then
       call search_neighbours(np, xv, b, rc_large, 0.0D0)
       call calc_qs(np, xv, rc, rcin)
-      call calc_averageq_around_nb(np, xv, rc, rcin)
-      write(*,*) "Note: bond-order parameters calculated."
-      call output_histo(pfil("histo_bq6.dat"), np, xv(:)%barq6, 0.0D0, 1.D0 , 0.005D0)
-      call output_histo(pfil("histo_bq4.dat"), np, xv(:)%barq4, 0.0D0, 0.2D0 , 0.001D0)
-      call output_histo(pfil("histo_q6.dat"), np, xv(:)%q6, 0.0D0, 1.0D0 , 0.005D0)
-      call output_histo(pfil("histo_q4.dat"), np, xv(:)%q4, 0.0D0, 1.0D0 , 0.005D0)
-      
-      call write_conf_pdb_withbarq(pfil("conf_withbarq.pdb"), np, xv, [b%tens(1,1),b%tens(2,2),b%tens(3,3)])
+      call calc_map(np, xv, rc, dq)
+    else
+      call output_pop(pfil("pop_ref.dat"), np, xv, b, dist)
+      if(alternative_calc) then
+        call do_calc_sep_phases_alternative(np, xv, b, dist)
+      else
+        call search_neighbours(np, xv, b, rc_large, 0.0D0)
+        call calc_qs(np, xv, rc, rcin)
+        call calc_averageq_around_nb(np, xv, rc, rcin)
+        write(*,*) "Note: bond-order parameters calculated."
+        call output_histo(pfil("histo_bq6.dat"), np, xv(:)%barq6, 0.0D0, 1.D0 , 0.005D0)
+        call output_histo(pfil("histo_bq4.dat"), np, xv(:)%barq4, 0.0D0, 0.2D0 , 0.001D0)
+        call output_histo(pfil("histo_q6.dat"), np, xv(:)%q6, 0.0D0, 1.0D0 , 0.005D0)
+        call output_histo(pfil("histo_q4.dat"), np, xv(:)%q4, 0.0D0, 1.0D0 , 0.005D0)
+        
+        call write_conf_pdb_withbarq(pfil("conf_withbarq.pdb"), np, xv, [b%tens(1,1),b%tens(2,2),b%tens(3,3)])
 
-      call do_calc_sep_phases(np, xv, b, dist)
-    end if
+        call do_calc_sep_phases(np, xv, b, dist)
+      end if
+    end if      
   end subroutine
   
   subroutine init_cutoffs(L, np)
@@ -689,6 +698,82 @@ contains
       xv(i)%barq6v = barq6v
       xv(i)%barq4v = barq4v
     end do
+  end subroutine
+
+  subroutine calc_map(np, xv, rc, dq)
+    !! Calculates C(i) = ∑ q6(i)⋅q6(j) / |q6(i)| |q6(j)| and makes a map C(q6,q4)
+    integer, intent(in) :: np
+    type(OrderData) :: xv(np)
+    real(8), intent(in) :: rc, dq
+    integer :: i, j, k, m, f, ih, jh
+    real(8), allocatable :: C(:)
+    real(8) :: q6i, d
+    complex(8) :: cl
+    allocate(C(np))
+    do i=1,np
+      C(i) = 0.0
+      do k=1,xv(i)%nvois
+        d = xv(i)%dist(k)
+        if(d<=rc) then
+          j=xv(i)%voisin(k)
+
+          cl = 0.0
+          do m=-lOrder,lOrder
+            cl = cl + xv(i)%q6v(m)*xv(j)%q6v(m)
+          end do
+          C(i) = C(i) + real(cl, 8)/(xv(i)%q6*xv(j)%q6)
+        endif
+      end do
+    end do
+    open(newunit=f, file=pfil("q4q6Cloud.dat"))
+    write(f, '(A)') "# q4 q6 C"
+    do i=1,np
+      write(f, '(3ES16.7)') xv(i)%q4, xv(i)%q6, C(i)
+    end do
+    close(f)
+
+    call calc_avCmap(np, xv, C, dq, pfil("q4q6Cmap.dat"))
+  end subroutine
+
+  subroutine calc_avCmap(np, xv, C,  dq, filename)
+    integer, intent(in) :: np
+    type(OrderData) :: xv(np)
+    real(8), intent(in) :: C(np)
+    real(8), intent(in) :: dq
+    character(*), intent(in) :: filename
+
+    real(8), allocatable :: avC(:,:), nsamp(:,:)
+    real(8) :: q4min, q6min
+    integer :: i, j, f, ih4, ih6, nh4, nh6
+    
+    q6min = minval(xv(:)%q6)
+    nh6 = floor((maxval(xv(:)%q6)- q6min)/dq) + 1
+
+    q4min = minval(xv(:)%q4)
+    nh4 = floor((maxval(xv(:)%q4) - q4min)/dq) + 1
+    allocate(avC(nh4, nh6), nsamp(nh4, nh6))
+    avC = 0._8
+    nsamp = 0._8
+    print *, "nh4 = ", nh4, " nh6 = ", nh6
+    do i=1, np
+      ih4 = 1 + floor((xv(i)%q4-q4min)/dq)
+      ih6 = 1 + floor((xv(i)%q6-q6min)/dq)
+
+      if(ih4 >= 1 .and. ih4 <= nh4 .and. ih6 >= 1 .and. ih6 <= nh6) then
+        avC(ih4, ih6) = avC(ih4, ih6) + C(i)
+        nsamp(ih4, ih6) = nsamp(ih4, ih6) + 1.0_8
+      end if
+    end do
+    where(nsamp > 0._8) avC = avC / nsamp
+
+    open(newunit=f, file=filename)
+    write(f, '(A)') "# q4 q6 C Np/N"
+    do i=1,nh4
+      do j=1,nh6
+        write(f, '(4ES16.7)') q4min + (i-1)*dq, q6min + (j-1)*dq, avC(i,j), nsamp(i, j)/np
+      end do
+    end do
+    close(f)
   end subroutine
 
   subroutine output_pop(fileName, np, pv, b, dist)
