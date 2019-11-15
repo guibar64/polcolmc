@@ -220,7 +220,7 @@ contains
     if(compute_q4q6_map) then
       call search_neighbours(np, xv, b, rc_large, 0.0D0)
       call calc_qs(np, xv, rc, rcin)
-      call calc_map(np, xv, rc, dq)
+      call calc_map(np, xv, b, rc, dq)
     else
       call output_pop(pfil("pop_ref.dat"), np, xv, b, dist)
       if(alternative_calc) then
@@ -700,14 +700,15 @@ contains
     end do
   end subroutine
 
-  subroutine calc_map(np, xv, rc, dq)
+  subroutine calc_map(np, xv, b, rc, dq)
     !! Calculates C(i) = ∑ q6(i)⋅q6(j) / |q6(i)| |q6(j)| and makes a map C(q6,q4)
     integer, intent(in) :: np
     type(OrderData) :: xv(np)
+    type(Box), intent(in) :: b
     real(8), intent(in) :: rc, dq
-    integer :: i, j, k, m, f, ih, jh
+    integer :: i, j, k, m, f
     real(8), allocatable :: C(:)
-    real(8) :: q6i, d
+    real(8) :: d
     complex(8) :: cl
     allocate(C(np))
     do i=1,np
@@ -717,9 +718,9 @@ contains
         if(d<=rc) then
           j=xv(i)%voisin(k)
 
-          cl = 0.0
+          cl = cmplx(0._8, 0._8, 8)
           do m=-lOrder,lOrder
-            cl = cl + xv(i)%q6v(m)*xv(j)%q6v(m)
+            cl = cl + xv(i)%q6v(m)*conjg(xv(j)%q6v(m))
           end do
           C(i) = C(i) + real(cl, 8)/(xv(i)%q6*xv(j)%q6)
         endif
@@ -733,6 +734,37 @@ contains
     close(f)
 
     call calc_avCmap(np, xv, C, dq, pfil("q4q6Cmap.dat"))
+    call calc_avCq6(np, xv, C, dq, pfil("Cvsq6.dat"))
+    call calc_Chisto(np, xv, C, 0.1_8, pfil("histo_C.dat"))
+
+    block
+      integer :: neg
+      neg = 0
+      do i=1,np
+        ! 🤔 select the upper part of the map ?
+        if(C(i)<0 .and. xv(i)%q6 > 0.5 .and. xv(i)%q4 < 0.13) then
+          neg = neg + 1
+          xv(i)%onprend = .true.
+        else
+          xv(i)%onprend = .false.
+        end if
+      end do
+      print *, "Note : #parts(C(i)<0) = ", neg
+      call output_XYZ_selection(np, xv, "Cinf9", b%tens(1,1), 0)
+  
+      neg = 0
+      do i=1,np
+        if(C(i)>4) then
+          neg = neg + 1
+          xv(i)%onprend = .true.
+        else
+          xv(i)%onprend = .false.
+        end if
+      end do
+      print *, "Note : #parts(C(i)>4) = ", neg
+      call output_XYZ_selection(np, xv, "Csup4", b%tens(1,1), 0)
+      
+    end block
   end subroutine
 
   subroutine calc_avCmap(np, xv, C,  dq, filename)
@@ -754,7 +786,7 @@ contains
     allocate(avC(nh4, nh6), nsamp(nh4, nh6))
     avC = 0._8
     nsamp = 0._8
-    print *, "nh4 = ", nh4, " nh6 = ", nh6
+    ! print *, "nh4 = ", nh4, " nh6 = ", nh6
     do i=1, np
       ih4 = 1 + floor((xv(i)%q4-q4min)/dq)
       ih6 = 1 + floor((xv(i)%q6-q6min)/dq)
@@ -772,6 +804,69 @@ contains
       do j=1,nh6
         write(f, '(4ES16.7)') q4min + (i-1)*dq, q6min + (j-1)*dq, avC(i,j), nsamp(i, j)/np
       end do
+    end do
+    close(f)
+  end subroutine
+
+  subroutine calc_avCq6(np, xv, C,  dq, filename)
+    integer, intent(in) :: np
+    type(OrderData) :: xv(np)
+    real(8), intent(in) :: C(np)
+    real(8), intent(in) :: dq
+    character(*), intent(in) :: filename
+
+    real(8), allocatable :: avC(:), nsamp(:)
+    real(8) :: q6min
+    integer :: i, j, f, ih6, nh6
+    
+    q6min = minval(xv(:)%q6)
+    nh6 = floor((maxval(xv(:)%q6)- q6min)/dq) + 1
+
+    allocate(avC(nh6), nsamp(nh6))
+    avC = 0._8
+    nsamp = 0._8
+    ! print *, "nh4 = ", nh4, " nh6 = ", nh6
+    do i=1, np
+      ih6 = 1 + floor((xv(i)%q6-q6min)/dq)
+
+      if(ih6 >= 1 .and. ih6 <= nh6) then
+        avC(ih6) = avC(ih6) + C(i)
+        nsamp(ih6) = nsamp(ih6) + 1.0_8
+      end if
+    end do
+    where(nsamp > 0._8) avC = avC / nsamp
+
+    open(newunit=f, file=filename)
+    write(f, '(A)') "# q4 q6 C Np/N"
+    do j=1,nh6
+      write(f, '(4ES16.7)') q6min + (j-1)*dq, avC(j), nsamp(j)/np
+    end do
+    close(f)
+  end subroutine
+
+  subroutine calc_Chisto(np, xv, C, dC, filename)
+    integer, intent(in) :: np
+    type(OrderData) :: xv(np)
+    real(8), intent(in) :: C(np)
+    real(8), intent(in) :: dC
+    character(*), intent(in) :: filename
+
+    real(8), allocatable :: h(:)
+    real(8) :: Cmin
+    integer :: i, ih, nh, f
+
+    Cmin = minval(C)
+    nh = 1 + floor((maxval(C) - CMin)/dC)
+    allocate(h(nh))
+    h = 0._8
+    do i=1,np
+      ih = 1 + floor((C(i)-Cmin)/dC)
+      if(ih >=1 .and. ih <= nh) h(ih) = h(ih) + 1
+    end do
+    
+    open(newunit=f, file=filename)
+    do i=1,nh
+      write(f, '(2ES16.7)') Cmin + (i-0.5)*dC, h(i)
     end do
     close(f)
   end subroutine
