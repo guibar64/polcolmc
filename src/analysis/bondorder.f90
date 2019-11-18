@@ -345,6 +345,7 @@ contains
 
     write(analog,*) "fluid-like particles"
     nflu = select_crit_custom(np, xv, "flu", cond_flu, is_selected,  rc_sel, with_nb=.true.)
+    xv(:)%onprend = .not. (xv(:)%isSmall .or. xv(:)%isBig)
     call output_pop(pfil("pop_flu.dat"), np, xv, b, dist)
     call output_XYZ_selection(np, xv, "flu", b%tens(1,1), 0)
 
