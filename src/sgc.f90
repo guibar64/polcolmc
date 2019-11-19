@@ -37,7 +37,7 @@ module sgc
     real(8), allocatable :: radius(:), table(:), table_der2(:)
   end type
 
-  type(ChemPotData) :: chemdat
+  type(ChemPotData), private :: chemdat
 
 contains
 
@@ -158,7 +158,6 @@ subroutine sgc_doublerun(simu)
 
   end block
   if(sgcpars%update_chempot_table) call update_chempot(psd, chemdat, "distrib_goal.dat", "chempot_table.dat")
-  call deallocate_simulation(simu)
 end subroutine
 
 
