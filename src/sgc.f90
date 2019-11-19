@@ -981,7 +981,7 @@ subroutine output_psd(p, file, meanN)
 
   dr = 1._8 / p%dri
   do i=lbound(p%h,1),ubound(p%h,1)
-    write(fo, '(2E16.7)') p%rmin + (i-0.5_8)*dr, p%h(i)*meanN
+    write(fo, '(2E16.7)') p%rmin + (i-0.5_8)*dr, p%h(i)
   end do
 
 end subroutine
