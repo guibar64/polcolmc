@@ -1,4 +1,5 @@
 module sgc
+  !! SemiGrand Canonical ensemble: N, T, V or P fixed + Δμ(R) fixed
   
   use ieee_arithmetic
   use simulation
