@@ -18,6 +18,7 @@ module sgc
     real(8) ::  min_radius = 2., max_radius = 30., dr_resize_max = 1.0
     real(8) ::  min_radius_psd = 2., max_radius_psd = 30., dr_psd = 0.10_8
     logical :: update_chempot_table = .false.
+    real(8) :: chempot_update_factor = 0.5
   end type
 
   real(8), allocatable :: kappa_table(:)  ! effective kappas
@@ -402,7 +403,10 @@ subroutine treat_additional_config(simu, sgcpars)
   if(get_param(simu%state%config, "sgc.update_chempot_table", val)) then
     sgcpars%update_chempot_table = read_logical(val)
   end if
- 
+  if(get_param(simu%state%config, "sgc.chempot_update_factor", val)) then
+    read(val,*) sgcpars%chempot_update_factor
+  end if
+
   if(sgcpars%min_radius_psd > sgcpars%min_radius) sgcpars%min_radius_psd = sgcpars%min_radius
   if(sgcpars%max_radius_psd < sgcpars%max_radius) sgcpars%max_radius_psd = sgcpars%max_radius
 end subroutine
@@ -459,7 +463,7 @@ subroutine update_chempot(p, ct, distfile, mufile)
   character(*), intent(in) :: distfile, mufile
 
   integer :: i, fold, fmu, n
-  real(8) :: dr, r
+  real(8) :: dr, r, delta
   real(8), allocatable :: dist_goal(:), mu(:)
   real(8), parameter :: dmin = 1.e-30
   !call histor8_set_distribution(p)
@@ -497,20 +501,26 @@ subroutine update_chempot(p, ct, distfile, mufile)
   end do
   close(fold)
 
-  ! Updating. DOES NOT WORK YET
+  ! See Wilding 2009
   do i=1, n
     if(p%h(i) < dmin) then
-      mu(i)= log(dmin)
+      mu(i)= ct%table(i) + sgcpars%chempot_update_factor * log(dist_goal(i))/log(dmin)
     else
-      mu(i) = ct%table(i) - log(p%h(i)) + log(dist_goal(i)) 
+      !todo: use densities as volume is not always constant
+      mu(i) = ct%table(i) + sgcpars%chempot_update_factor * log(dist_goal(i)/p%h(i))
     end if
   end do
+  ! Shift (only Δμ is relevant for semigrand)
+  mu(:) = mu(:) - mu(1)
   open(newunit=fmu, file=mufile)
   write(fmu, '(A, I0)') "#mu ", n
   do i=1,n
     write(fmu, '(2E16.7)') ct%radius(i), mu(i)
   end do
   print *, "TODEL ", sqrt(sum((mu(:) - ct%table(:))**2)/n)
+
+  delta = sum(abs(p%h(:)-dist_goal(:)))
+  write(output_unit, '(A, ES15.7)') "μ update: Δ = ", delta
 
   close(fmu)
 end subroutine
