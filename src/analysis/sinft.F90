@@ -17,6 +17,7 @@ implicit none
 
 real(8), parameter, private :: PI=3.141592653589793
 
+#if FOURIER_TRANSFORM == FFTW3
 ! interface to fftw3
 integer(C_INT), parameter :: FFTW_RODFT10 = 9,FFTW_ESTIMATE = 64
 interface
@@ -39,6 +40,9 @@ interface
     type(c_ptr), value :: p
   end subroutine
 end interface
+integer, private :: nfft = 0
+type(c_ptr) pfft
+#endif
 
 contains
 
