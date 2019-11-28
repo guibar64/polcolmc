@@ -742,7 +742,7 @@ contains
       integer :: neg
       neg = 0
       do i=1,np
-        ! 🤔 select the upper part of the map ?
+        ! select the upper part of the map
         if(C(i)<0 .and. xv(i)%q6 > 0.5 .and. xv(i)%q4 < 0.13) then
           neg = neg + 1
           xv(i)%onprend = .true.
@@ -750,11 +750,25 @@ contains
           xv(i)%onprend = .false.
         end if
       end do
-      print *, "Note : #parts(C(i)<0) = ", neg
-      call output_XYZ_selection(np, xv, "Cinf9", b%tens(1,1), 0)
+      print *, "Note : #parts(C(i)<0,q4<0.13,q6>0.5) = ", neg
+      call output_XYZ_selection(np, xv, "Cinf0_topregion", b%tens(1,1), 0)
+      
+      neg = 0
+      do i=1,np
+        ! select the lower part of the map
+        if(C(i)<0 .and. xv(i)%q6 < 0.3 .and. xv(i)%q4 < 0.1) then
+          neg = neg + 1
+          xv(i)%onprend = .true.
+        else
+          xv(i)%onprend = .false.
+        end if
+      end do
+      print *, "Note : #parts(C(i)<0,q4<0.1,q6<0.3) = ", neg
+      call output_XYZ_selection(np, xv, "Cinf0_bottomregion", b%tens(1,1), 0)
   
       neg = 0
       do i=1,np
+        ! "crystal-like"
         if(C(i)>4) then
           neg = neg + 1
           xv(i)%onprend = .true.
