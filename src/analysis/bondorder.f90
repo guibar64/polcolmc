@@ -4,6 +4,7 @@ module bondorder
 use state, only: Distrib, Box, PI
 use geom, only: volume_box
 use spherharm
+use histograms
 use iso_fortran_env
 implicit none
 
@@ -28,9 +29,20 @@ type OrderData
   integer :: n_big_nb
 end type OrderData
 
+type BondResults
+  !! Data to compute averages and histograms at each step
+  integer :: nsamples
+  real(8) :: x_bcc, x_fcc, x_hcp, x_flu, x_small, x_big
+  type(Histor8) :: histo_bq6, histo_bq4, histo_q6, histo_q4
+  real(8), allocatable :: pop_bcc(:), pop_fcc(:), pop_hcp(:), pop_flu(:), pop_small(:), pop_big(:)
+  real(8), allocatable :: rads(:), pops(:)
+  integer :: analog, frac_file
+  integer :: traj_bcc, traj_hcp, traj_fcc, traj_flu, traj_big, traj_small
+  integer :: traj_Cinf0_bottomregion, traj_Cinf0_topregion, traj_Csup4
+end type
+
 character(*),parameter :: fmt_519="(a,1x,i6,2x,a,1x,a,1x,i5,4x,f8.3,f8.3,f8.3,1x,f5.2,f6.2)"
 character(len=:), allocatable, private :: prefout
-integer, private :: analog=71
 
 real(8), private, parameter :: s4p = sqrt(4*PI)
 real(8), private :: norm_fac = s4p, rc = -1.
@@ -65,7 +77,7 @@ private :: nbvois_cond_small, nbvois_cond_big
 private :: makesel, calc_mean_sel_nb, calc_mean_nb, calc_all_n_sel_nb, select_crit_custom
 private :: prodm3v3, pbc
 private :: init_cutoffs, do_calc_sep_phases, ze_selection_big_small_small_around_big
-private :: output_bigsmallbig, calc_qs, calc_averageq_around_nb, output_pop, search_neighbours
+private :: calc_qs, calc_averageq_around_nb, search_neighbours
 private :: output_histo, write_conf_pdb_withbarq
 
 abstract interface
@@ -79,14 +91,15 @@ end interface
 contains
 
 
-  subroutine bondorder_initialize(np, xv, dist, config)
+  subroutine bondorder_initialize(np, xv, bor, dist, config)
     !! Initialize bond-order analysis
     use readparam
     implicit none
-    integer, intent(in) :: np !! number of particles
-    type(OrderData) :: xv(np) !! particle data array
-    type(Distrib) :: dist     !! distribution
-    type(ParamList) :: config  !! parameters
+    integer, intent(in) :: np     !! number of particles
+    type(OrderData) :: xv(np)     !! particle data array
+    type(BondResults), intent(out) :: bor !! results
+    type(Distrib) :: dist         !! distribution
+    type(ParamList) :: config     !! parameters
     character(len=:), allocatable :: key, val
     integer :: i
 
@@ -186,8 +199,49 @@ contains
       xv(i)%order2_moy = 0.d0
     end do
 
-    open(newunit=analog, file=pfil("log.txt"))
-    
+    open(newunit=bor%analog, file=pfil("log.txt"))
+    open(newunit=bor%frac_file, file=pfil("phase_fractions_traj.dat"))
+    open(newunit=bor%traj_bcc, file=pfil("sel_bcc.xyz"))
+    open(newunit=bor%traj_hcp, file=pfil("sel_hcp.xyz"))
+    open(newunit=bor%traj_fcc, file=pfil("sel_fcc.xyz"))
+    open(newunit=bor%traj_flu, file=pfil("sel_flu.xyz"))
+    open(newunit=bor%traj_big, file=pfil("sel_big.xyz"))
+    open(newunit=bor%traj_small, file=pfil("sel_small.xyz"))
+
+    bor%nsamples = 0
+    bor%x_bcc = 0.0
+    bor%x_fcc = 0.0
+    bor%x_hcp = 0.0
+    bor%x_flu = 0.0
+    bor%x_big = 0.0
+    bor%x_small = 0.0
+
+    !todo: These values should not be hardcoded
+    call histor8_init(bor%histo_bq6, 0.005_8, 0.0_8, 200)
+    call histor8_init(bor%histo_bq4, 0.001_8, 0.0_8, 200)
+    call histor8_init(bor%histo_q6, 0.005_8, 0.0_8, 200)
+    call histor8_init(bor%histo_q4, 0.005_8, 0.0_8, 200)
+
+    allocate(bor%rads(dist%nfam), bor%pops(dist%nfam))
+    bor%rads = dist%rad(1:dist%nfam)
+    allocate(bor%pop_bcc(dist%nfam))
+    bor%pop_bcc = 0._8
+    allocate(bor%pop_hcp(dist%nfam))
+    bor%pop_hcp = 0._8
+    allocate(bor%pop_flu(dist%nfam))
+    bor%pop_flu = 0._8
+    allocate(bor%pop_fcc(dist%nfam))
+    bor%pop_fcc = 0._8
+    allocate(bor%pop_small(dist%nfam))
+    bor%pop_small = 0._8
+    allocate(bor%pop_big(dist%nfam))
+    bor%pop_big = 0._8
+
+    if(compute_q4q6_map) then
+      open(newunit=bor%traj_Cinf0_topregion, file=pfil("traj_Cinf0_topregion.xyz"))
+      open(newunit=bor%traj_Cinf0_bottomregion, file=pfil("Cinf0_bottomregion.xyz"))
+      open(newunit=bor%traj_Csup4, file=pfil("Csup4.xyz"))
+    end if
   end subroutine bondorder_initialize
 
   function pfil(s)
@@ -197,19 +251,73 @@ contains
     pfil = prefout // s
   end function pfil
   
-  subroutine bondorder_finalize(np, xv)
-    !! End of bond-order
+  subroutine bondorder_finalize(np, xv, bor)
+    !! End of bond-order. Final value of results are calculated and printed to files.
     integer :: np
     type(OrderData) :: xv(np)
-    close(analog)
+    type(BondResults) :: bor
+    integer :: ufc, i
+
+    close(bor%analog)
+    close(bor%frac_file)
+
+    bor%x_bcc = bor%x_bcc / bor%nsamples
+    bor%x_fcc = bor%x_fcc / bor%nsamples
+    bor%x_hcp = bor%x_hcp / bor%nsamples
+    bor%x_flu = bor%x_flu / bor%nsamples
+    bor%x_small = bor%x_small / bor%nsamples
+    bor%x_big = bor%x_big / bor%nsamples
+
+    open(newunit=ufc, file=pfil("phase_fractions.dat"))
+    write(ufc, '(9ES16.7)') vol_frac, bor%x_bcc, bor%x_fcc, bor%x_hcp, bor%x_flu, bor%x_big, bor%x_small
+    close(ufc)
+
+    !call output_pop(pfil("pop_ref.dat"), np, xv, b, dist)
+    call output_histo(pfil("histo_bq6.dat"), bor%histo_bq6)
+    call output_histo(pfil("histo_bq4.dat"), bor%histo_bq4)
+    call output_histo(pfil("histo_q6.dat"), bor%histo_q6)
+    call output_histo(pfil("histo_q4.dat"), bor%histo_q4)
+
+    bor%pops = bor%pops / bor%nsamples
+    bor%pop_bcc = bor%pop_bcc / bor%nsamples
+    bor%pop_hcp = bor%pop_hcp / bor%nsamples
+    bor%pop_fcc = bor%pop_fcc / bor%nsamples
+    bor%pop_flu = bor%pop_flu / bor%nsamples
+    bor%pop_small = bor%pop_small / bor%nsamples
+    bor%pop_big = bor%pop_big / bor%nsamples
+    open(newunit=ufc, file=pfil("mean_pops.dat"))
+    write(ufc, '(A)') "# R all bcc hcp fcc flu big small"
+    do i=1,ubound(bor%rads,1)
+      write(ufc, '(8ES16.7)') bor%rads(i), bor%pops(i), bor%pop_bcc(i), bor%pop_hcp(i), bor%pop_fcc(i), bor%pop_flu(i),&
+        bor%pop_big(i), bor%pop_small(i)
+    end do
+    close(ufc)
+
+    close(bor%analog)
+    close(bor%frac_file)
+    close(bor%traj_bcc)
+    close(bor%traj_hcp)
+    close(bor%traj_fcc)
+    close(bor%traj_flu)
+    close(bor%traj_big)
+    close(bor%traj_small)
+
+    if(compute_q4q6_map) then
+      close(bor%traj_Cinf0_bottomregion)
+      close(bor%traj_Cinf0_topregion)
+      close(bor%traj_Csup4)
+    end if
   end subroutine bondorder_finalize    
   
-  subroutine bondorder_do_step(np, xv, b, dist)
+  subroutine bondorder_do_step(np, xv, bor, b, step, dist)
     !! Calculation step
     integer, intent(in) :: np !! number of particles
     type(OrderData) :: xv(np) !! particle data array
+    type(BondResults) :: bor  !! results
     type(Box), intent(in) :: b !! simulation box (to get positions etc...)
+    integer, intent(in) :: step !! step number
     type(Distrib) :: dist       !! particle distribution
+    integer :: i
     vol_frac = calc_vol_frac(b)
 
     xv(:)%onprend = .true.
@@ -217,29 +325,27 @@ contains
     ! Selections from splitting q6: n_neighbours_crit
     
     call init_cutoffs(b%volume**(1.d0/3.d0), np)
+    call search_neighbours(np, xv, b, rc_large, 0.0D0)
+    call calc_qs(np, xv, rc, rcin)
+    call calc_averageq_around_nb(np, xv, rc, rcin)
+    bor%nsamples = bor%nsamples + 1
+    do i=1,np
+      call histor8_update(bor%histo_bq6, xv(i)%barq6)
+      call histor8_update(bor%histo_bq4, xv(i)%barq4)
+      call histor8_update(bor%histo_q6, xv(i)%q6)
+      call histor8_update(bor%histo_q4, xv(i)%q4)
+    end do
     if(compute_q4q6_map) then
-      call search_neighbours(np, xv, b, rc_large, 0.0D0)
-      call calc_qs(np, xv, rc, rcin)
-      call calc_map(np, xv, b, rc, dq)
+      call calc_map(np, xv, bor, b, rc, dq)
+    end if
+    ! todo: nocalc switch
+    if(alternative_calc) then
+      call do_calc_sep_phases_alternative(np, xv, b, step, dist, bor)
     else
-      call output_pop(pfil("pop_ref.dat"), np, xv, b, dist)
-      if(alternative_calc) then
-        call do_calc_sep_phases_alternative(np, xv, b, dist)
-      else
-        call search_neighbours(np, xv, b, rc_large, 0.0D0)
-        call calc_qs(np, xv, rc, rcin)
-        call calc_averageq_around_nb(np, xv, rc, rcin)
-        write(*,*) "Note: bond-order parameters calculated."
-        call output_histo(pfil("histo_bq6.dat"), np, xv(:)%barq6, 0.0D0, 1.D0 , 0.005D0)
-        call output_histo(pfil("histo_bq4.dat"), np, xv(:)%barq4, 0.0D0, 0.2D0 , 0.001D0)
-        call output_histo(pfil("histo_q6.dat"), np, xv(:)%q6, 0.0D0, 1.0D0 , 0.005D0)
-        call output_histo(pfil("histo_q4.dat"), np, xv(:)%q4, 0.0D0, 1.0D0 , 0.005D0)
-        
-        call write_conf_pdb_withbarq(pfil("conf_withbarq.pdb"), np, xv, [b%tens(1,1),b%tens(2,2),b%tens(3,3)])
-
-        call do_calc_sep_phases(np, xv, b, dist)
-      end if
-    end if      
+      call do_calc_sep_phases(np, xv, b, step, dist, bor)
+    end if
+    xv(1:np)%onprend = .true.
+    call update_pop(bor%pops, np, xv, b)
   end subroutine
   
   subroutine init_cutoffs(L, np)
@@ -249,7 +355,7 @@ contains
 
     if(L> 0.D0 .and. rc<0.D0) then
       rc=1.5D0*L/(np**(1.D0/3))
-      write(analog,*) "cutoff radius = ",rc
+      ! write(analog,*) "cutoff radius = ",rc
     end if
 
     if(rc_small < 0) rc_small = 0.945 * rc
@@ -272,31 +378,33 @@ contains
     calc_vol_frac = 4.d0/3.d0*PI*s/v
   end function
   
-  subroutine do_calc_sep_phases(np, xv, b, dist)
+  subroutine do_calc_sep_phases(np, xv, b, step, dist, bor)
     !! Find the phase of particles (current state) among fluid, bcc, fcc, hcp and Laves.
     !! Outputs particle distributions of each phase.
     integer, intent(in) :: np !! number of particles
     type(OrderData) :: xv(np) !! particle data array
     type(Box) :: b            !! simulation box
+    integer, intent(in) :: step !! step number
     type(Distrib) :: dist     !! particle distribution
+    type(BondResults) :: bor  !! results
     integer :: nbig, nsma, nbcc, nhcp, nfcc, nflu,nbig_pre, nsma_pre, ufc=72, ntot, nfcc_2, nhcp_2
     real(8) :: rc_mean
     ! mean cut-off (used as well for the computation of order parameters)
     rc_mean = rc
-    write(*,*) "calc sep phases" 
-    write(*,*) "Laves"
-    write(analog,*)  
+    write(bor%analog,*)
     ! Select 'Big' particles
-    write(analog,*) "Big particles (q6+bq6+nvois)"
-    nbig_pre = select_crit_custom(np, xv, "critq6bq6nvois_big", big_q6_bq6_cond, nbvois_cond_big, rc_big, with_nb=.true.)
+    write(bor%analog,*) "Big particles (q6+bq6+nvois)"
+    nbig_pre = select_crit_custom(np, xv, "critq6bq6nvois_big", bor%analog, big_q6_bq6_cond, nbvois_cond_big, rc_big, &
+      with_nb=.true.)
     !call output_pop(pfil("pop_big-pre.dat"), np, xv, b, dist)
     
     xv(:)%isPreBig = xv(:)%onprend
   
-    write(analog,*)
+    write(bor%analog,*)
     ! Select 'Small' particles
-    write(analog,*) "Small particles (q6+bq6+nvois)"
-    nsma_pre = select_crit_custom(np, xv, "critq6bq6nvois_small", small_q6_bq6_cond, nbvois_cond_small, rc_small, with_nb=.true.)
+    write(bor%analog,*) "Small particles (q6+bq6+nvois)"
+    nsma_pre = select_crit_custom(np, xv, "critq6bq6nvois_small", bor%analog, small_q6_bq6_cond, nbvois_cond_small, rc_small, &
+      with_nb=.true.)
     !call output_pop(pfil("pop_small-pre.dat"), np, xv, b, dist)
 
     xv(:)%isPreSmall = xv(:)%onprend
@@ -304,62 +412,67 @@ contains
     call ze_selection_big_small_small_around_big(np, xv, rc_mean)
     nbig = bigs_count(np,xv)
     nsma = smalls_count(np,xv)
-    write(analog,*) "Small and bigs fulfilling: rCutmean & nvoispetites_autour_d_une_grosse"
-    write(analog,*) "Nbigs   = ", nbig
-    write(analog,*) "Nsmalls = ", nsma
-    call output_bigsmallbig(np, xv, b%tens(1,1), 0)
+    write(bor%analog,*) "Small and bigs fulfilling: rCutmean & nvoispetites_autour_d_une_grosse"
+    write(bor%analog,*) "Nbigs   = ", nbig
+    write(bor%analog,*) "Nsmalls = ", nsma
 
     xv(:)%onprend = xv(:)%isBig
-    call output_pop(pfil("pop_big.dat"), np, xv, b, dist)
+    call update_pop(bor%pop_big, np, xv, b)
+    call output_XYZ_selection(np, xv, bor%traj_big, b%tens(1,1), 0)
+
     xv(:)%onprend = xv(:)%isSmall
-    call output_pop(pfil("pop_small.dat"), np, xv, b, dist)
+    call update_pop(bor%pop_small, np, xv, b)
+    call output_XYZ_selection(np, xv, bor%traj_small, b%tens(1,1), 0)
 
     ! Filter bc/fcc/etc particles...
-    write(analog,*) "bcc/fcc/etc particles"
-    write(*,*) "bcc/fcc/etc particles" 
-    write(analog,*) "bcc particles"
-    nbcc = select_crit_custom(np, xv, "bcc", cond_bcc, is_selected,  rc_sel, with_nb=.true.)
-    call output_pop(pfil("pop_bcc.dat"), np, xv, b, dist)
-    call output_XYZ_selection(np, xv, "bcc", b%tens(1,1), 0)
+    write(bor%analog,*) "bcc/fcc/etc particles"
+    write(bor%analog,*) "bcc particles"
+    nbcc = select_crit_custom(np, xv, "bcc", bor%analog, cond_bcc, is_selected,  rc_sel, with_nb=.true.)
+    call update_pop(bor%pop_bcc, np, xv, b)
+    call output_XYZ_selection(np, xv, bor%traj_bcc, b%tens(1,1), 0)
 
-    write(analog,*) "hcp particles"
-    nhcp = select_crit_custom(np, xv, "hcp", cond_hcp, is_selected,  rc_sel, with_nb=.true.)
-    call output_pop(pfil("pop_hcp.dat"), np, xv, b, dist)
-    call output_XYZ_selection(np, xv, "hcp", b%tens(1,1), 0)
+    write(bor%analog,*) "hcp particles"
+    nhcp = select_crit_custom(np, xv, "hcp", bor%analog, cond_hcp, is_selected,  rc_sel, with_nb=.true.)
+    call update_pop(bor%pop_hcp, np, xv, b)
+    call output_XYZ_selection(np, xv, bor%traj_hcp, b%tens(1,1), 0)
 
+    write(bor%analog,*) "fcc particles"
+    nfcc = select_crit_custom(np, xv, "fcc", bor%analog, cond_fcc, is_selected,  rc_sel, with_nb=.true.)
+    call update_pop(bor%pop_fcc, np, xv, b)
+    call output_XYZ_selection(np, xv, bor%traj_fcc, b%tens(1,1), 0)
 
-    write(analog,*) "fcc particles"
-    nfcc = select_crit_custom(np, xv, "fcc", cond_fcc, is_selected,  rc_sel, with_nb=.true.)
-    call output_pop(pfil("pop_fcc.dat"), np, xv, b, dist)
-    call output_XYZ_selection(np, xv, "fcc", b%tens(1,1), 0)
+    write(bor%analog,*) "fcc particles (q4-bases)"
+    nfcc_2 = select_crit_custom(np, xv, "fcc_2", bor%analog, cond_fcc_2, is_selected,  rc_sel, with_nb=.true.)
+    ! call output_pop(pfil("pop_fcc_2.dat"), np, xv, b, dist)
+    ! call output_XYZ_selection(np, xv, "fcc_2", b%tens(1,1), 0)
 
-    write(analog,*) "fcc particles (q4-bases)"
-    nfcc_2 = select_crit_custom(np, xv, "fcc_2", cond_fcc_2, is_selected,  rc_sel, with_nb=.true.)
-    call output_pop(pfil("pop_fcc_2.dat"), np, xv, b, dist)
-    call output_XYZ_selection(np, xv, "fcc_2", b%tens(1,1), 0)
+    write(bor%analog,*) "fcc particles (remove q4-based fcc parts)"
+    nhcp_2 = select_crit_custom(np, xv, "hcp_2", bor%analog, cond_hcp_2, is_selected,  rc_sel, with_nb=.true.)
+    ! call output_pop(pfil("pop_hcp_2.dat"), np, xv, b, dist)
+    ! call output_XYZ_selection(np, xv, "hcp_2", b%tens(1,1), 0)
 
-    write(analog,*) "fcc particles (remove q4-based fcc parts)"
-    nhcp_2 = select_crit_custom(np, xv, "hcp_2", cond_hcp_2, is_selected,  rc_sel, with_nb=.true.)
-    call output_pop(pfil("pop_hcp_2.dat"), np, xv, b, dist)
-    call output_XYZ_selection(np, xv, "hcp_2", b%tens(1,1), 0)
-
-    write(analog,*) "fluid-like particles"
-    nflu = select_crit_custom(np, xv, "flu", cond_flu, is_selected,  rc_sel, with_nb=.true.)
+    write(bor%analog,*) "fluid-like particles"
+    nflu = select_crit_custom(np, xv, "flu", bor%analog, cond_flu, is_selected,  rc_sel, with_nb=.true.)
     xv(:)%onprend = .not. (xv(:)%isSmall .or. xv(:)%isBig)
-    call output_pop(pfil("pop_flu.dat"), np, xv, b, dist)
-    call output_XYZ_selection(np, xv, "flu", b%tens(1,1), 0)
+    call update_pop(bor%pop_flu, np, xv, b)
+    call output_XYZ_selection(np, xv, bor%traj_flu, b%tens(1,1), 0)
 
     ntot = nbcc + nhcp + nfcc + nflu + nbig + nsma
-    write(analog,*)
-    write(analog,*) "tot criter = ", ntot, " / ", np
+    write(bor%analog,*)
+    write(bor%analog,*) "tot criter = ", ntot, " / ", np
 
-    open(newunit=ufc, file=pfil("phase_fractions.dat"))
-    write(ufc, '(9ES16.7)') vol_frac, frac(nbcc,np), frac(nhcp,np), &
+    write(bor%frac_file, '(I10,8ES16.7)') step, frac(nbcc,np), frac(nhcp,np), &
     frac(nfcc,np), frac(max(0,nflu-nbig-nsma),np),  frac(nbig, np), frac(nsma,np), frac(nfcc_2, np), frac(nhcp_2, np)
-    close(ufc)
+
+    bor%x_bcc = bor%x_bcc + frac(nbcc,np)
+    bor%x_fcc = bor%x_fcc + frac(nfcc,np)
+    bor%x_hcp = bor%x_hcp + frac(nhcp,np)
+    bor%x_flu = bor%x_flu + frac(max(0,nflu-nbig-nsma),np)
+    bor%x_small = bor%x_small + frac(nsma,np)
+    bor%x_big = bor%x_big + frac(nbig,np)
   end subroutine do_calc_sep_phases
 
-  subroutine do_calc_sep_phases_alternative(np, xv, b, dist)
+  subroutine do_calc_sep_phases_alternative(np, xv, b, step, dist, bor)
     !! Find the phase of particles (current state) among fluid, bcc, fcc, hcp (alternative).
     !! Outputs particle distributions of each phase.
     !!
@@ -369,7 +482,9 @@ contains
     integer, intent(in) :: np !! number of particles
     type(OrderData) :: xv(np) !! particle data array
     type(Box) :: b            !! simulation box
+    integer, intent(in) :: step !! step number
     type(Distrib) :: dist     !! particle distribution
+    type(BondResults) :: bor  !! results
     integer :: i, nbcc, nhcp, nfcc, nflu, ufc=72, nq
     real(8) :: rc_mean
     real(8) :: qvals(np)
@@ -385,14 +500,15 @@ contains
 
     ! mean cut-off (used as well for the computation of order parameters)
     rc_mean = rc
-    write(analog,*) "fluid-like particles"
+    write(bor%analog,*) "fluid-like particles"
 
-    nflu = select_crit_custom(np, xv, "flu", cond_flu_alt, is_selected, rc_sel, with_nb=.false.)
+    nflu = select_crit_custom(np, xv, "flu", bor%analog, cond_flu_alt, is_selected, rc_sel, with_nb=.false.)
     where(xv%onprend)
       xv%extracted = .true.
     end where
-    call output_pop(pfil("pop_flu.dat"), np, xv, b, dist)
-    call output_XYZ_selection(np, xv, "flu", b%tens(1,1), 0)
+    ! call output_pop(pfil("pop_flu.dat"), np, xv, b, dist)
+    call update_pop(bor%pop_flu, np, xv, b)
+    call output_XYZ_selection(np, xv, bor%traj_flu, b%tens(1,1), 0)
     print *, "flu: ", nflu, nflu, num_extracted(np,xv)
  
 
@@ -407,7 +523,8 @@ contains
           qvals(nq) = xv(i)%barq4
         end if
       end do
-      call output_histo(pfil("histo_bq4_notflu.dat"), nq, qvals, 0.0D0, 0.2D0 , 0.001D0)
+      !todo: update histos
+      !call output_histo(pfil("histo_bq4_notflu.dat"), nq, qvals, 0.0D0, 0.2D0 , 0.001D0)
 
       nq = 0
       do i=1,np
@@ -416,20 +533,20 @@ contains
           qvals(nq) = xv(i)%barq4
         end if
       end do
-      call output_histo(pfil("histo_bq4_flu.dat"), nq, qvals, 0.0D0, 0.2D0 , 0.001D0)
+      !call output_histo(pfil("histo_bq4_flu.dat"), nq, qvals, 0.0D0, 0.2D0 , 0.001D0)
 
-      call output_histo(pfil("histo_bq4.dat"), np, xv(:)%barq4, 0.0D0, 0.2D0 , 0.001D0)
+      !call output_histo(pfil("histo_bq4.dat"), np, xv(:)%barq4, 0.0D0, 0.2D0 , 0.001D0)
     end block
-    write(analog,*) "fcc"
-    nfcc = select_crit_custom(np, xv, "fcc", is_not_extracted, cond_fcc_alt, rc_sel, with_nb=.false.)
+    write(bor%analog,*) "fcc"
+    nfcc = select_crit_custom(np, xv, "fcc", bor%analog, is_not_extracted, cond_fcc_alt, rc_sel, with_nb=.false.)
     where(xv%onprend)
       xv%extracted = .true.
     end where
-    call output_pop(pfil("pop_fcc.dat"), np, xv, b, dist)
-    call output_XYZ_selection(np, xv, "fcc", b%tens(1,1), 0)
-    print *, "fcc: ", nfcc, nfcc + nflu, num_extracted(np,xv), num_sel(np, xv)
+    call update_pop(bor%pop_fcc, np, xv, b)
+    call output_XYZ_selection(np, xv, bor%traj_fcc, b%tens(1,1), 0)
+    ! print *, "fcc: ", nfcc, nfcc + nflu, num_extracted(np,xv), num_sel(np, xv)
 
-    nhcp = select_crit_custom(np, xv, "hcp", is_not_extracted, cond_hcp_alt, rc_sel, with_nb=.false.)
+    nhcp = select_crit_custom(np, xv, "hcp", bor%analog, is_not_extracted, cond_hcp_alt, rc_sel, with_nb=.false.)
     print *,"hcp (presel): ", nhcp 
     block
       integer :: nvsel,jv,j
@@ -473,8 +590,9 @@ contains
     where(xv%onprend)
       xv%extracted = .true.
     end where
-    call output_pop(pfil("pop_hcp.dat"), np, xv, b, dist)
-    call output_XYZ_selection(np, xv, "hcp", b%tens(1,1), 0)
+    ! call output_pop(pfil("pop_hcp.dat"), np, xv, b, dist)
+    call update_pop(bor%pop_hcp, np, xv, b)
+    call output_XYZ_selection(np, xv, bor%traj_hcp, b%tens(1,1), 0)
     print *,"hcp: ", nhcp, nfcc + nflu + nhcp, num_extracted(np,xv)
 
     xv(:)%onprend = .not. xv(:)%extracted
@@ -483,14 +601,20 @@ contains
       xv%extracted = .true.
     end where
     print *,"bcc: ", nbcc, nbcc + nfcc + nflu + nhcp, num_extracted(np,xv)
-    call output_pop(pfil("pop_bcc.dat"), np, xv, b, dist)
-    call output_XYZ_selection(np, xv, "bcc", b%tens(1,1), 0)
+    ! call output_pop(pfil("pop_bcc.dat"), np, xv, b, dist)
+    call update_pop(bor%pop_bcc, np, xv, b)
+    call output_XYZ_selection(np, xv, bor%traj_bcc, b%tens(1,1), 0)
     
-
-    open(newunit=ufc, file=pfil("phase_fractions.dat"))
-    write(ufc, '(5ES16.7)') vol_frac, frac(nbcc,np), frac(nhcp,np), &
+    write(bor%frac_file, '(I10,4ES16.7)') step, frac(nbcc,np), frac(nhcp,np), &
     frac(nfcc,np), frac(nflu,np)
-    close(ufc)
+
+    bor%x_bcc = bor%x_bcc + frac(nbcc,np)
+    bor%x_fcc = bor%x_fcc + frac(nfcc,np)
+    bor%x_hcp = bor%x_hcp + frac(nhcp,np)
+    bor%x_flu = bor%x_flu + frac(nflu,np)
+    !todo
+    ! bor%x_small = bor%x_small + frac(nsma,np)
+    ! bor%x_big = bor%x_big + frac(nbig,np)
     contains
  
   end subroutine
@@ -556,39 +680,39 @@ contains
     enddo
   end subroutine ze_selection_big_small_small_around_big
 
-  subroutine output_bigsmallbig(np, xv, bl, step)
-    !! Outputs the positions of big and small particles of the Laves.
-    integer, intent(in) :: np
-    type(OrderData) :: xv(np)
-    real(8), intent(in) :: bl
-    integer, intent(in) :: step
-    integer :: i, nbig, nsmall, ufc=61
+  ! subroutine output_bigsmallbig(np, xv, bl, step)
+  !   !! Outputs the positions of big and small particles of the Laves.
+  !   integer, intent(in) :: np
+  !   type(OrderData) :: xv(np)
+  !   real(8), intent(in) :: bl
+  !   integer, intent(in) :: step
+  !   integer :: i, nbig, nsmall, ufc=61
 
-    nbig = bigs_count(np,xv)
-    nsmall = smalls_count(np,xv)
+  !   nbig = bigs_count(np,xv)
+  !   nsmall = smalls_count(np,xv)
 
-    open(newunit=ufc, file=pfil("sel_big.xyz"))
-    write(ufc, *) nbig
-    write(ufc,'("L = ",ES16.7,", step = ",I10)') bl,step
-    write(ufc, '(A)') "Generated by ana_order2_conf"
-    do i=1,np
-      if( xv(i)%isBig) then
-        write(ufc,'("SIL", I0,1x, 3ES16.7)') xv(i)%fam, xv(i)%pos
-      endif
-    enddo
-    close(ufc)
+  !   open(newunit=ufc, file=pfil("sel_big.xyz"))
+  !   write(ufc, *) nbig
+  !   write(ufc,'("L = ",ES16.7,", step = ",I10)') bl,step
+  !   write(ufc, '(A)') "Generated by ana_order2_conf"
+  !   do i=1,np
+  !     if( xv(i)%isBig) then
+  !       write(ufc,'("SIL", I0,1x, 3ES16.7)') xv(i)%fam, xv(i)%pos
+  !     endif
+  !   enddo
+  !   close(ufc)
 
-    open(newunit=ufc, file=pfil("sel_small.xyz"))
-    write(ufc, *) nsmall
-    write(ufc,'("L = ",ES16.7,", step = ",I10)') bl,step
-    do i=1,np
-      if( xv(i)%isSmall) then
-        write(ufc,'("SIL", I0,1x, 3ES16.7)') xv(i)%fam, xv(i)%pos
-      endif
-    enddo
-    close(ufc)
+  !   open(newunit=ufc, file=pfil("sel_small.xyz"))
+  !   write(ufc, *) nsmall
+  !   write(ufc,'("L = ",ES16.7,", step = ",I10)') bl,step
+  !   do i=1,np
+  !     if( xv(i)%isSmall) then
+  !       write(ufc,'("SIL", I0,1x, 3ES16.7)') xv(i)%fam, xv(i)%pos
+  !     endif
+  !   enddo
+  !   close(ufc)
 
-  end subroutine output_bigsmallbig
+  ! end subroutine output_bigsmallbig
 
   real(8) function frac(n,p)
     integer, intent(in) :: n,p
@@ -701,10 +825,11 @@ contains
     end do
   end subroutine
 
-  subroutine calc_map(np, xv, b, rc, dq)
+  subroutine calc_map(np, xv, bor, b, rc, dq)
     !! Calculates C(i) = ∑ q6(i)⋅q6(j) / |q6(i)| |q6(j)| and makes a map C(q6,q4)
     integer, intent(in) :: np
     type(OrderData) :: xv(np)
+    type(BondResults) :: bor
     type(Box), intent(in) :: b
     real(8), intent(in) :: rc, dq
     integer :: i, j, k, m, f
@@ -750,8 +875,8 @@ contains
           xv(i)%onprend = .false.
         end if
       end do
-      print *, "Note : #parts(C(i)<0,q4<0.13,q6>0.5) = ", neg
-      call output_XYZ_selection(np, xv, "Cinf0_topregion", b%tens(1,1), 0)
+      write(bor%analog,*) "Note : #parts(C(i)<0,q4<0.13,q6>0.5) = ", neg
+      call output_XYZ_selection(np, xv, bor%traj_Cinf0_topregion, b%tens(1,1), 0)
       
       neg = 0
       do i=1,np
@@ -763,8 +888,8 @@ contains
           xv(i)%onprend = .false.
         end if
       end do
-      print *, "Note : #parts(C(i)<0,q4<0.1,q6<0.3) = ", neg
-      call output_XYZ_selection(np, xv, "Cinf0_bottomregion", b%tens(1,1), 0)
+      write(bor%analog,*) "Note : #parts(C(i)<0,q4<0.1,q6<0.3) = ", neg
+      call output_XYZ_selection(np, xv, bor%traj_Cinf0_bottomregion, b%tens(1,1), 0)
   
       neg = 0
       do i=1,np
@@ -776,8 +901,8 @@ contains
           xv(i)%onprend = .false.
         end if
       end do
-      print *, "Note : #parts(C(i)>4) = ", neg
-      call output_XYZ_selection(np, xv, "Csup4", b%tens(1,1), 0)
+      write(bor%analog,*) "Note : #parts(C(i)>4) = ", neg
+      call output_XYZ_selection(np, xv, bor%traj_Csup4, b%tens(1,1), 0)
       
     end block
   end subroutine
@@ -885,29 +1010,44 @@ contains
     end do
     close(f)
   end subroutine
-
-  subroutine output_pop(fileName, np, pv, b, dist)
-    !! Prints a distribution to a file (particle selected by field `onprend`)
-    character(*), intent(in) :: fileName
+  
+  subroutine update_pop(pop, np, pv, b)
+    !! Update average distribution (particle selected by field `onprend`)
+    real(8) :: pop(:)
     integer, intent(in) :: np
-    type(Box), intent(in) :: b
-    type(Distrib), intent(in) :: dist
     type(OrderData) :: pv(np)
-    integer :: ufc=62,i,j
-    real(8) :: popv(dist%nfam)
-    popv = 0.0
+    type(Box), intent(in) :: b
+    integer :: i,j
     do i=1,np
       if (pv(i)%onprend) then
         j = b%parts(i)%famille
-        popv(j) = popv(j) + 1
+        pop(j) = pop(j) + 1._8
       endif
     enddo
-    open(newunit=ufc, file=fileName)
-    do i=1,dist%nfam
-      write(ufc,'(2ES16.7)')  dist%rad(i), popv(i)
-    enddo
-    close(ufc)
   end subroutine
+
+  ! subroutine output_pop(fileName, np, pv, b, dist)
+  !   !! Prints a distribution to a file (particle selected by field `onprend`)
+  !   character(*), intent(in) :: fileName
+  !   integer, intent(in) :: np
+  !   type(Box), intent(in) :: b
+  !   type(Distrib), intent(in) :: dist
+  !   type(OrderData) :: pv(np)
+  !   integer :: ufc=62,i,j
+  !   real(8) :: popv(dist%nfam)
+  !   popv = 0.0
+  !   do i=1,np
+  !     if (pv(i)%onprend) then
+  !       j = b%parts(i)%famille
+  !       popv(j) = popv(j) + 1
+  !     endif
+  !   enddo
+  !   open(newunit=ufc, file=fileName)
+  !   do i=1,dist%nfam
+  !     write(ufc,'(2ES16.7)')  dist%rad(i), popv(i)
+  !   enddo
+  !   close(ufc)
+  ! end subroutine
   
   subroutine search_neighbours(np, xv, b, rc, rcin)
     !! Performs a neigbor search. Result is contained in `xv`.
@@ -1209,11 +1349,12 @@ contains
     calc_all_n_sel_nb = real(nv_moy, 8) / real(ntot, 8)
   end function
 
-  integer function select_crit_custom(np, xv, name, cond1, cond2, rcut, with_nb)
+  integer function select_crit_custom(np, xv, name, analog, cond1, cond2, rcut, with_nb)
     !! Selects particles satisfying the two conditions `cond1` and `cond2`.
     integer, intent(in) :: np !! number of particles
     type(OrderData) :: xv(np)  !! particle data array
     character(*), intent(in) :: name !! name of the selection
+    integer, intent(in) :: analog    !! unit to print information
     real(8), intent(in) :: rcut  !! cutoff radius
     procedure(OrderCondition) :: cond1 !! condition 1 (logical function (type(OrderData :: item)))
     procedure(OrderCondition) :: cond2 !! condition 2 (logical function (type(OrderData :: item)))
@@ -1261,11 +1402,11 @@ contains
     select_crit_custom = nnn
   end function
 
-  subroutine output_XYZ_selection(np, xv, name, bl, step)
-    !! Prints coordinates of selected particles to a file.
+  subroutine output_XYZ_selection(np, xv, unit, bl, step)
+    !! Prints coordinates of selected particles to `unit`.
     integer, intent(in) :: np !! number of particles
     type(OrderData) :: xv(np)  !! particle data array
-    character(*), intent(in) :: name !! name of the selection
+    integer, intent(in) :: unit!! unit of the trajectory file
     real(8) , intent(in) :: bl !! box length
     integer , intent(in) :: step !! step
     integer :: ufc = 199, i, nnn
@@ -1275,16 +1416,14 @@ contains
       if(xv(i)%onprend) nnn = nnn + 1
     end do
 
-    open(newunit=ufc, file=pfil("sel_" // name // ".xyz"))
-    write(ufc, *) nnn
-    write(ufc,'("L = ",ES16.7,", step = ",I10)') bl,step
+    ! open(newunit=ufc, file=pfil("sel_" // name // ".xyz"))
+    write(unit, *) nnn
+    write(unit,'("L = ",ES16.7,", step = ",I10)') bl,step
     do i=1,np
       if( xv(i)%onprend) then
-        write(ufc,'("SIL", I0, 1x, 3ES16.7)') xv(i)%fam, xv(i)%pos
+        write(unit,'("SIL", I0, 1x, 3ES16.7)') xv(i)%fam, xv(i)%pos
       endif
     end do
-    close(ufc)
-
   end subroutine
 
   function prodm3v3(m,v) result(r)
@@ -1319,35 +1458,22 @@ contains
     end do
   end function pbc
   
-  subroutine output_histo(fileName, np, v, qmin, qmax, dq)
-    !! Output histogram of a bond-order parameter.
+  subroutine output_histo(fileName, hist)
+    !! Output histogram of a bond-order parameter. *Note*: distribution
+    !! is computed. 
     character(*) :: fileName  !! path to the output file 
-    integer, intent(in) :: np !! number of particles
-    real(8), intent(in) :: v(np) !! values of the bop
-    real(8), intent(in) :: qmax , qmin, dq !! interval
+    type(Histor8), intent(inout) :: hist !! histogram
     
     real(8), allocatable :: histo(:)
-    integer :: i, nq, ig, ufc=201
-    real(8) :: dqi
-    
-    dqi = 1.0/dq
-    
-    nq = floor((qmax-qmin)*dqi) + 1
-    allocate(histo(nq))
-    histo = 0.D0
-    do i=1, np
-      ig = floor((v(i)-qmin)*dqi) + 1
-      if (ig>0 .and. ig <= nq) histo(ig) = histo(ig) + 1.D0
-    end do
-    
-    histo(:) = histo/(dq*np)
-    
+    integer :: i, ufc
+    real(8) :: dr
+    dr = 1._8/hist%dri
+    call histor8_set_distribution(hist)
     open(newunit=ufc, file=fileName)
-    do i=1, nq
-      write(ufc, '(2ES16.7)') qmin + (i-0.5)*dq, histo(i)
+    do i=1, ubound(hist%h, 1)
+      write(ufc, '(2ES16.7)') hist%rmin + (i-0.5)*dr, hist%h(i)
     enddo
     close(ufc)
-    
   end subroutine
   
   subroutine write_conf_pdb_withbarq(fileName, np, xv, lengths)

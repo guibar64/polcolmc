@@ -15,7 +15,7 @@ character(*), parameter :: POLCOLMC_VERSION="0.7.0"
 integer, parameter :: RUN_SIMU=0, CALC_GDER=1, CONVERT=2, RESCALE=3, EXTRACT=4, DOUBLE=5,TABLES=6, CALC_BONDORDER=7,&
   CALC_MSD=8, PRUNE=9
 
-logical :: para_lec_only=.false.,verb=.false., use_bocfg=.false., bo_multiconf = .false.
+logical :: para_lec_only=.false.,verb=.false., use_bocfg=.false.
 character(256) :: option
 character(256) :: progname,fich_dist="distrib",fich_par="polcolmc.cfg",fich_in="in.inst",fich_out="polcolmc.out",&
   fich_bocfg = "bondorder.cfg"
@@ -147,8 +147,6 @@ do while (i < argc)
     call get_command_argument(i,option)
     fich_bocfg = trim(option)
     use_bocfg = .true.
-  case("--multiconf")
-    bo_multiconf = .true.
   case("bondorder")
     action = CALC_BONDORDER
     i=i+1  ; call check_arg(i, "INPUT_FILE")
@@ -218,9 +216,9 @@ case(TABLES)
   call do_mktables(dr_mktables,fich_dist, fich_par)
 case(CALC_BONDORDER)
   if(use_bocfg) then
-    call analyze_bondorder(infile, fich_dist, fich_par, ibox, bo_multiconf, fich_bocfg)
+    call analyze_bondorder(infile, fich_dist, fich_par, ibox, fich_bocfg)
   else
-    call analyze_bondorder(infile, fich_dist, fich_par, ibox, bo_multiconf)
+    call analyze_bondorder(infile, fich_dist, fich_par, ibox)
   end if
 case(CALC_MSD)
   call compute_msd(infile, outfile,fich_dist, fich_par, ibox, bstep, estep)

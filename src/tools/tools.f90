@@ -700,7 +700,7 @@ subroutine convert_conf(nin, fichin, fichout, fich_dist, fich_par, iformat, ofor
 
 end subroutine
 
-subroutine analyze_bondorder(fichin, fich_dist, fich_par, ibox, multiframe, fich_bocfg)
+subroutine analyze_bondorder(fichin, fich_dist, fich_par, ibox, fich_bocfg)
   !! Performs bond-order analysis on a trajectory.
   use state
   use bondorder
@@ -711,7 +711,6 @@ subroutine analyze_bondorder(fichin, fich_dist, fich_par, ibox, multiframe, fich
   character(*), intent(in) :: fichin     !! input trajectory
   character(*), intent(in) :: fich_dist  !! distribution file
   character(*), intent(in) :: fich_par   !! trajectory file
-  logical, intent(in) :: multiframe      !! if set to .true. the trajectory is analyzed (mean positions)
   character(*), intent(in), optional :: fich_bocfg !! bond-order configuration
   integer, intent(in) :: ibox            !! box index
   real(8) :: Lmin
@@ -721,6 +720,7 @@ subroutine analyze_bondorder(fichin, fich_dist, fich_par, ibox, multiframe, fich
   type(ParamList) :: config
   type(OrderData), allocatable :: x(:)
   integer :: np
+  type(BondResults) :: results
   real(8) :: rpos(3), pos(3), r2
   real(8), allocatable :: inip(:,:), relp(:,:)
   
@@ -736,62 +736,40 @@ subroutine analyze_bondorder(fichin, fich_dist, fich_par, ibox, multiframe, fich
       stop 1
     end if
 
-    call bondorder_initialize(np, x, st%dist, config)
+    call bondorder_initialize(np, x, results, st%dist, config)
   else
-    call bondorder_initialize(np, x, st%dist, st%config)
+    call bondorder_initialize(np, x, results, st%dist, st%config)
   end if
   fg = open_pmconf(fichin, old=.true.)
   nframe=0
   do s=1,10000 ! TODO: multiple frame analysis
-      call read_pmconf_frame(st,fg, .false., status)
-      if(status == iostat_end) then
-        exit
-      else if(status /= 0) then
-        write(error_unit, *) "Problem in input file. Exiting."
-        stop 1
-      end if
-      nframe = nframe + 1
+    call read_pmconf_frame(st,fg, .false., status)
+    if(status == iostat_end) then
+      exit
+    else if(status /= 0) then
+      write(error_unit, *) "Problem in input file. Exiting."
+      stop 1
+    end if
+    nframe = nframe + 1
 
-      if(nframe==1) then
-        call allocate_multires(st)
-        do k=1,st%ntotbox
-          Lmin = st%boxes(k)%tens(1,1)
-          do i=2, 3
-            if(Lmin>st%boxes(k)%tens(i,i)) then
-              Lmin = st%boxes(k)%tens(i,i)
-            end if
-          end do
-
-          call update_box_fam(st%boxes(k), st%dist)
+    if(nframe==1) then
+      call allocate_multires(st)
+      do k=1,st%ntotbox
+        Lmin = st%boxes(k)%tens(1,1)
+        do i=2, 3
+          if(Lmin>st%boxes(k)%tens(i,i)) then
+            Lmin = st%boxes(k)%tens(i,i)
+          end if
         end do
 
-        do i=1,np
-          inip(1:3, i) = st%boxes(ibox)%parts(i)%pos(1:3)
-          relp(1:3, i) = 0.d0
-        end do
-        if(.not. multiframe) exit
-      else
-        do i=1,np
-          pos(1:3) = st%boxes(ibox)%parts(i)%pos(1:3) - inip(1:3, i)
-          r2 = dist2_mi(pos, rpos, st%boxes(ibox)%met, st%mode_box)
-          relp(1:3,i) = relp(1:3,i) + rpos(1:3) 
-        end do
-      end if
-  end do
-  if(nframe > 1) then
-    do i=1,np
-      do k=1,3
-        st%boxes(ibox)%parts(i)%pos(k) = modulo(inip(k,i) + relp(k,i)/(nframe-1), 1.d0)
+        call update_box_fam(st%boxes(k), st%dist)
       end do
-      if(i<10) print *, st%boxes(ibox)%parts(i)%pos
-    end do
-  end if
-  call bondorder_do_step(st%boxes(ibox)%n, x, st%boxes(ibox), st%dist)
-
+    else
+    end if
+    call bondorder_do_step(st%boxes(ibox)%n, x, results, st%boxes(ibox), st%step, st%dist)
+  end do
   call close_pmconf(fg)
-  call bondorder_finalize(np, x)
-  deallocate(x)
-
+  call bondorder_finalize(np, x, results)
 end subroutine
 
 subroutine compute_msd(fichin, fichout,fich_dist, fich_par, ibox, bstep, estep)

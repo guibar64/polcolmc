@@ -16,7 +16,7 @@ subroutine histor8_init(p, dr, rmin, n)
   type(HistoR8), intent(out) :: p
   real(8), intent(in) :: dr   !! step
   real(8), intent(in) :: rmin !! minimum value
-  integer, intent(in) :: n                !! number of points 
+  integer, intent(in) :: n    !! number of points 
 
   p%nupd = 0
   p%dri = 1.d0 / dr
