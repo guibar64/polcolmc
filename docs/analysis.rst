@@ -106,8 +106,8 @@ Options
 
 --bondorder-cfg   BOND_ORDER_CONFIG   Separate configuration file for bond-order analysis
 
-The bond-order parameters (qₗ) are computed from the input position file ``INPUT_FILE``
-(eg ``pcmc_out.inst`` and determines the composition of crystal phases.
+The bond-order parameters (qₗ) are computed from the input trajectory file ``INPUT_FILE``
+(eg ``pcmc_out.inst``) and used to determine the composition of crystal phases.
 
 This will produce (too) many files with the ``bondorder_`` prefix, see below.
 
@@ -189,22 +189,22 @@ bondorder_phase_fractions.dat
 	Φ   bcc  hcp fcc  fluid  laves(big) laves(small)
 	=== ==== === ==== ====== ========== ============
 
+bondorder_phase_fractions_traj.dat
+  Fraction of each phase for each step. Columns of the form:
+
+  ======= ==== ==== === ==== ====== ========== ============
+  radius  all  bcc  hcp fcc  fluid  laves(big) laves(small)
+  ======= ==== ==== === ==== ====== ========== ============
+
 bondorder_histo_qx.dat
 	Contains an histogram of the *qx* parameter where *qx* can be: 
 	q4, q4, bq4, bq6, the last two being the neighbor-averaged q's.
 
-bondorder_pop_phase.dat
-	Size distribution of the phase *phase*.
+bondorder_mean_pops.dat
+	Size distribution of the phases *phase*.
 
 bondorder_sel_phase.xyz
 	Coordinates of particles in the phase *phase*, in the XYZ format.
-
-bondorder_conf_withbarq.pdb
-	Coordinates of all the particles in the PDB format. The
-	average q₆ and q₄ of each particle are passed to the 
-	fields *occupancy* and *beta* respectively. This way they can be
-	displayed in software like VMD.
-
 
 
 ---------------------------------------
