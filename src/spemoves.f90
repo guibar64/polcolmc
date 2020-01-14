@@ -601,8 +601,10 @@ end function echang2p_box
     ip = 1 + floor(ran2(st%rng)*labox1%n)
     authtoselfam = .false.
     do i=1,st%inp%n_rospechmax
-       if(labox1%fam(i)>0) authtoselfam = .true.
-       exit
+       if(labox1%fam(i)>0) then
+         authtoselfam = .true.
+         exit
+       end if
     end do
     if(authtoselfam) then
        do while(labox1%parts(ip)%famille > st%inp%n_rospechmax)
