@@ -191,13 +191,15 @@ integer function echang2p_box(st, nr)
   ip1 = 1 + floor(ran2(st%rng)*labox2%n)
   authtoselfam = .false.
   do i=1,st%dist%nfam
-     if(i/=fam1 .and. labox2%fam(i)>0) authtoselfam = .true.
-     exit
+     if(i/=fam1 .and. labox2%fam(i)>0) then
+      authtoselfam = .true.
+      exit
+     end if
   end do
   if(authtoselfam) then
      do while(labox2%Parts(ip1)%Famille == fam1 )
         ip1 = 1 + floor(ran2(st%rng)*labox2%n)
-     enddo
+     end do
   else
      echang2p_box = mv_cir_rej
      return
@@ -599,8 +601,10 @@ end function echang2p_box
     ip = 1 + floor(ran2(st%rng)*labox1%n)
     authtoselfam = .false.
     do i=1,st%inp%n_rospechmax
-       if(labox1%fam(i)>0) authtoselfam = .true.
-       exit
+       if(labox1%fam(i)>0) then
+         authtoselfam = .true.
+         exit
+       end if
     end do
     if(authtoselfam) then
        do while(labox1%parts(ip)%famille > st%inp%n_rospechmax)
