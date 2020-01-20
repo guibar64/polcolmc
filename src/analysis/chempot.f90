@@ -4,7 +4,7 @@ module chempot
   implicit none
 
   ! ChemPot calculations globals
-  logical :: chempwid_doit_doit   !! toggles the computation or not of the chemical otentials
+  logical :: chempwid_initialized = .false.   !! toggles the computation or not of the chemical otentials
   ! Widom-like way
   integer,allocatable :: chempwid_nsample(:,:) !! number of samples (widom). Array(box, family]
   real(8),allocatable :: chempwid_bmu(:,:)     !! excess chemical potential (cumulated during simulation). Array(box, family)
@@ -31,7 +31,7 @@ contains
     allocate(chempwid_nsample(st%dist%nfam,st%ntotbox),chempros_nsample(st%dist%nfam,st%ntotbox))
     allocate(chempwid_bmu(st%dist%nfam,st%ntotbox),chempros_bmu(st%dist%nfam,st%ntotbox))
     allocate(chempwid_bmu_tot(st%dist%nfam,st%ntotbox),chempros_bmu_tot(st%dist%nfam,st%ntotbox))
-
+    chempwid_initialized = .true.
     call chempwid_reset(st)
   end subroutine chempwid_init
 
@@ -113,6 +113,7 @@ contains
     deallocate(chempwid_nsample, chempros_nsample)
     deallocate(chempwid_bmu, chempros_bmu)
     deallocate(chempwid_bmu_tot, chempros_bmu_tot)
+    chempwid_initialized = .false.
   end subroutine chempwid_free
 
 end module chempot

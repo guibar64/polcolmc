@@ -303,7 +303,7 @@ end function echang2p_box
 
     ener1_2 =  ener0_2 + nr%energy_1p(st,labox2,part)
     if(ener1_2%noverlap) then
-       if(chempwid_doit_doit) then
+       if(chempwid_initialized) then
           chempwid_bmu(part%famille,ibox2) = chempwid_bmu(part%famille,ibox2) + &
                exp(ener0_2%ep - ener1_2%ep)
        end if
@@ -320,7 +320,7 @@ end function echang2p_box
        part%pos=store_pos
        mouv1p_box=mv_hs_rej
     endif
-    if(chempwid_doit_doit) chempwid_nsample(part%famille,ibox2) = chempwid_nsample(part%famille,ibox2) + 1
+    if(chempwid_initialized) chempwid_nsample(part%famille,ibox2) = chempwid_nsample(part%famille,ibox2) + 1
 
   end associate
   end function mouv1p_box
@@ -669,7 +669,7 @@ end function echang2p_box
        endif
        weight_new = weight_new +  trial_prob(k)
     end do
-    if(chempwid_doit_doit) then
+    if(chempwid_initialized) then
        chempros_bmu(part%famille,ibox2) = chempros_bmu(part%famille,ibox2) + weight_new/ntrials_rosbth
        chempros_nsample(part%famille,ibox2) = chempros_nsample(part%famille,ibox2) + 1
     end if

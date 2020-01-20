@@ -1074,7 +1074,7 @@ contains
            call zdens_update(st)
       if(check_period(rstep, st%inp%stepfluctu)) &
            call fluct_dens_update(st)
-      if(st%inp%widom_period > 0) then
+      if(check_period(rstep, st%inp%widom_period)) then
         call chempwid_update(st, sim%nrg, st%inp%widom_samples)
       end if
     end if
@@ -1216,7 +1216,7 @@ contains
       end if
       if(st%inp%fluctudens) call fluct_dens_free()
       if(st%inp%pZdens > 0) call zdens_free()
-      if(st%inp%chempwid_doit) call chempwid_free()
+      if(st%inp%chempwid_doit .or. st%inp%widom_period > 0) call chempwid_free()
     end if
     end associate
   end subroutine simulation_analysis_free
