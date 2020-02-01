@@ -45,6 +45,7 @@ set(SIMU_SRC
   tools/trr.F90
   tools/tools.f90
   sgc.f90
+  ostwald.f90
 )
 
 add_library(pcmc ${SIMU_SRC} ${NRG_SRC} ${CORE_SRC})
