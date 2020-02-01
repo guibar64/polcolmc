@@ -6,6 +6,7 @@ use simulation, only: MCSimulation, run_simulation_equil, run_simulation, init_s
 use tools
 use readparam, only: warn_about_unkown_params
 use sgc, only: sgc_doublerun
+use ostwald, only: ostwald_main
 use iso_fortran_env
 !$ use omp_lib
 implicit none
@@ -194,10 +195,10 @@ end if
 select case(action)
 case(RUN_SIMU)
   call init_simulation(the_sim, fich_dist,fich_par,fich_in)
-  if(the_sim%state%inp%asimu == "SGC") then
+  if(the_sim%state%inp%asimu(1:2) == "SG") then
     call sgc_doublerun(the_sim)
-  else if(the_sim%state%inp%asimu == "Ostwald") then
-    print *, "To be implemented"
+  else if(the_sim%state%inp%asimu(1:7) == "Ostwald") then
+    call ostwald_main(the_sim)
   else
     call run_simulation_equil(the_sim, the_sim%state%inp%maxcycle_stab)
     call run_simulation(the_sim, the_sim%state%inp%maxcycle_calc)

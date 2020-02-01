@@ -26,7 +26,7 @@ Activated *de facto* by setting ``box_to_box_probability`` and ``volume_exchange
 Semi-grand canonical ensemble
 =============================
 
-Activated by setting ``simulation_type`` to "SGC".
+Activated by setting ``simulation_type`` to "SGVT" or the isobaric variant "SGPT".
 
 The radii of the particles can vary but not the total number, this variation is regulated by a tabulated chemical potential.
 In addition, if ``update_chempot_table`` is set to ``yes``, the chemical potential table is updated according to a goal distribution,
@@ -66,7 +66,7 @@ chempot_table.dat.old
 Additional parameters
 ---------------------
 
-Additional parameters are added in a section ``[SGC]`` in the config file.
+Additional parameters are added in a section ``[sgc]`` in the config file.
 
 particle_resize_prob
     Probability to make a particle resize move. Default is 0.
@@ -105,7 +105,7 @@ Ostwald ripening
 ================
 
 
-Activated by setting ``simulation_type`` to "Ostwald".
+Activated by setting ``simulation_type`` to "Ostwald-VT" or "Ostwald-PT".
 
 The particles can exchange “monomers” with a finite bulk. This is meant to be an *out-of-equilibrium* simulation, 
 the interpretation in the context of MC simulations is left to the user.

@@ -14,7 +14,6 @@ module sgc
     logical :: big_mvmt = .true.
     integer :: kappa_update_period = 100
     logical :: update_kappa_radius_resize = .false.
-    logical :: npt_special = .false.
     real(8) ::  min_radius = 2., max_radius = 30., dr_resize_max = 1.0
     real(8) ::  min_radius_psd = 2., max_radius_psd = 30., dr_psd = 0.10_8
     logical :: update_chempot_table = .false.
@@ -59,7 +58,7 @@ subroutine sgc_doublerun(simu)
   call add_move(simu%moves, "Particle resize" , sgcpars%particle_resize_prob, particle_resize)
   call add_move(simu%moves, "Particle resize (cte Vₚ)" , sgcpars%particle_resize_cvf_prob, particle_resize_cvf)
 
-  if(sgcpars%npt_special) then
+  if(simu%state%inp%asimu == "SGPT") then
     if(simu%state%inp%prob_volmod<=0._8) then
       prob_volmod=1._8/dble(maxval(simu%state%boxes(1:simu%state%ntotbox)%n))
     else
@@ -86,29 +85,29 @@ subroutine sgc_doublerun(simu)
     end associate
   end block
 
-  block
-    real(8) :: kappa, r
-    integer :: j, i, fu, nfam
-    real(8), allocatable :: rads(:), charges(:), pop(:)
-    associate(st => simu%state)
-    nfam = st%dist%nfam
-    allocate(rads(nfam), charges(nfam), pop(nfam))
-    kappa = get_kappa(st,1)
-    pop = 0
-    do i=1,st%boxes(1)%n
-      j = st%boxes(1)%parts(i)%famille
-      r = st%boxes(1)%parts(i)%rayon
-      rads(j) = r
-      charges(j) = st%boxes(1)%parts(i)%ech * exp(- kappa * r)*(1 + kappa*r)
-      pop(j) = pop(j) + 1
-    end do
-    open(newunit=fu, file ="distrib-fromtable")
-    write(fu, *) nfam
-    do i=1,nfam
-      write(fu, '(I10, 2ES16.7)') int(pop(i)), rads(i), charges(i)
-    end do
-    end associate
-  end block
+  ! block
+  !   real(8) :: kappa, r
+  !   integer :: j, i, fu, nfam
+  !   real(8), allocatable :: rads(:), charges(:), pop(:)
+  !   associate(st => simu%state)
+  !   nfam = st%dist%nfam
+  !   allocate(rads(nfam), charges(nfam), pop(nfam))
+  !   kappa = get_kappa(st,1)
+  !   pop = 0
+  !   do i=1,st%boxes(1)%n
+  !     j = st%boxes(1)%parts(i)%famille
+  !     r = st%boxes(1)%parts(i)%rayon
+  !     rads(j) = r
+  !     charges(j) = st%boxes(1)%parts(i)%ech * exp(- kappa * r)*(1 + kappa*r)
+  !     pop(j) = pop(j) + 1
+  !   end do
+  !   open(newunit=fu, file ="distrib-fromtable")
+  !   write(fu, *) nfam
+  !   do i=1,nfam
+  !     write(fu, '(I10, 2ES16.7)') int(pop(i)), rads(i), charges(i)
+  !   end do
+  !   end associate
+  ! end block
 
 
   block
@@ -396,9 +395,6 @@ subroutine treat_additional_config(simu, sgcpars)
   end if
   if(get_param(simu%state%config, "sgc.psd_dr", val)) then
     read(val,*) sgcpars%dr_psd
-  end if
-  if(get_param(simu%state%config, "sgc.npt_special", val)) then
-    sgcpars%npt_special = read_logical(val)
   end if
   if(get_param(simu%state%config, "sgc.update_chempot_table", val)) then
     sgcpars%update_chempot_table = read_logical(val)
