@@ -170,7 +170,7 @@ Simulation parameters
 simulation_type
 ---------------
 
-Can be **NVT**   or **NPT**.
+Can be "NVT", "NPT", "SGC" (semi-grand canonical) or "Ostwald" (dissolution-precipitation). See :doc:`ensembles`.
 
 temperature 
 -----------
@@ -396,8 +396,8 @@ Probability of a move consisting in a swap between particles of different boxes.
 Default is 0.
 
 
-probability_box_to_box_probability
-----------------------------------
+box_to_box_probability
+----------------------
 
 Probability of a move consisting in moving a particle from one box to another.
 
@@ -545,4 +545,4 @@ density_fluctuations_file
 
 Sets input file for density fluctuations calculations.
 Default is *fluctuations_input.txt*.
-   
+

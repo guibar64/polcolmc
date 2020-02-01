@@ -19,6 +19,7 @@ The statistical ensembles can be: NVT, NPT or Gibbs.
     usage
     parapage
     analysis
+    ensembles
     developing
 
 ..    extending

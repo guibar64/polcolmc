@@ -78,7 +78,6 @@ implicit none
     integer :: widom_samples = 1
     integer :: seed_analysis = 16385673
     integer :: internal_steps = -1
-    logical :: semigrand = .false.
   end type Input
 
 
@@ -244,8 +243,6 @@ contains
       read(val, *) inp%widom_samples
     case("internal_steps")
       read(val, *) inp%internal_steps
-    case("semigrand")
-      inp%semigrand = read_logical(val)
     case default
       input_find_keyval = .false.        
     end select

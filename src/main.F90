@@ -194,8 +194,10 @@ end if
 select case(action)
 case(RUN_SIMU)
   call init_simulation(the_sim, fich_dist,fich_par,fich_in)
-  if(the_sim%state%inp%semigrand) then
+  if(the_sim%state%inp%asimu == "SGC") then
     call sgc_doublerun(the_sim)
+  else if(the_sim%state%inp%asimu == "Ostwald") then
+    print *, "To be implemented"
   else
     call run_simulation_equil(the_sim, the_sim%state%inp%maxcycle_stab)
     call run_simulation(the_sim, the_sim%state%inp%maxcycle_calc)
